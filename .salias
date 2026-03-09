@@ -5,3 +5,6 @@ alias build='npm run docker-build'
 
 alias dcup='docker compose up -d'
 alias dcdown='docker compose down;ds'
+
+# Sync main and mryan with upstream mirotalk
+alias gitupdate='git remote get-url upstream &>/dev/null || git remote add upstream https://github.com/miroslavpejic85/mirotalk.git; git fetch upstream && git checkout master && git merge upstream/master && git checkout mryan && git merge master && git checkout mryan'
