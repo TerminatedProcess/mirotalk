@@ -1,0 +1,7 @@
+dcup;ds
+alias stop='docker compose stop'
+alias run='docker compose start'
+alias build='npm run docker-build'
+
+alias dcup='docker compose up -d'
+alias dcdown='docker compose down;ds'
