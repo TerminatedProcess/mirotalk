@@ -1,6 +1,6 @@
-alias load='gitupdate;dcdown;dcup;ds'
+alias run='gitupdate;dcdown;dcup;ds'
 alias stop='docker compose stop'
-alias run='docker compose start'
+alias start='docker compose start'
 alias build='npm run docker-build'
 
 alias dcup='docker compose up -d'
@@ -10,4 +10,3 @@ alias rungrok='ngrok http 4321'
 # Sync main and mryan with upstream mirotalk
 alias gitupdate='git remote get-url upstream &>/dev/null || git remote add upstream https://github.com/miroslavpejic85/mirotalk.git; git fetch upstream && git checkout master && git merge upstream/master && git checkout mryan && git merge master && git checkout mryan'
 
-load
