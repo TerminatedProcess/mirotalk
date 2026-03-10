@@ -1,10 +1,11 @@
+clear
+alias dcup='docker compose up -d'
+alias dcdown='docker compose down;ds'
 alias run='gitupdate;dcdown;dcup;ds'
-alias stop='docker compose stop'
+alias stop='dcdown'
 alias start='docker compose start'
 alias build='npm run docker-build'
 
-alias dcup='docker compose up -d'
-alias dcdown='docker compose down;ds'
 alias rungrok='ngrok http 4321'
 
 # Sync main and mryan with upstream mirotalk
