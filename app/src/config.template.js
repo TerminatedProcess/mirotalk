@@ -2,7 +2,7 @@
 
 /**
  * ==============================================
- * MiroTalk P2P v.1.7.44 - Configuration File
+ * MiroTalk P2P v.1.7.58 - Configuration File
  * ==============================================
  *
  * This file is the central configuration source.
@@ -282,10 +282,27 @@ module.exports = {
             newCallRoomDescription:
                 "Each room has its disposable URL. Just pick a room name and share your custom URL. It's that easy.",
             loginTitle: 'MiroTalk - Host Protected login required.',
+            loginHeading: 'Welcome back',
+            loginDescription: 'Enter your credentials to continue.',
+            loginButtonLabel: 'Login',
+            joinRoomTitle: 'Pick name.<br />Share URL.<br />Start conference.',
+            joinRoomButtonLabel: 'JOIN ROOM',
             clientTitle: 'MiroTalk WebRTC Video call, Chat Room & Screen Sharing.',
             privacyPolicyTitle: 'MiroTalk - privacy and policy.',
             stunTurnTitle: 'Test Stun/Turn Servers.',
             notFoundTitle: 'MiroTalk - 404 Page not found.',
+            waitingRoomTitle: 'MiroTalk - Waiting for host to start the meeting',
+            waitingRoomHeading: 'Waiting for host...',
+            waitingRoomDescription:
+                "The meeting hasn't started yet.<br />You'll join automatically when the host opens the room.",
+            waitingRoomStatus: 'Checking room status...',
+            waitingRoomReady: 'Room is ready! Joining...',
+            waitingRoomWaiting: 'Waiting for host to start the meeting...',
+            waitingRoomHostLink: 'Are you the host?',
+            waitingRoomLoginLink: 'Login here',
+            waitingRoomElapsedJust: 'Just started waiting',
+            waitingRoomElapsedMinutes: 'Waiting for {minutes}',
+            waitingRoomSongUrl: '../sounds/waiting-music.mp3',
         },
         html: {
             topSponsors: true,

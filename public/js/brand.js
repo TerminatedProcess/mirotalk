@@ -10,6 +10,17 @@ const newCallTitle = document.getElementById('newCallTitle');
 const newCallRoomTitle = document.getElementById('newCallRoomTitle');
 const newCallRoomDescription = document.getElementById('newCallRoomDescription');
 const loginTitle = document.getElementById('loginTitle');
+const loginHeading = document.getElementById('loginHeading');
+const loginDescription = document.getElementById('loginDescription');
+const loginButtonLabel = document.getElementById('loginButtonLabel');
+const joinRoomTitle = document.getElementById('joinRoomTitle');
+const joinRoomButtonLabel = document.getElementById('joinRoomButtonLabel');
+const waitingRoomTitle = document.getElementById('waitingRoomTitle');
+const waitingRoomHeading = document.getElementById('waitingRoomHeading');
+const waitingRoomDescription = document.getElementById('waitingRoomDescription');
+const waitingRoomStatus = document.getElementById('waitingStatus');
+const waitingRoomHostLink = document.getElementById('waitingRoomHostLink');
+const waitingRoomLoginLink = document.getElementById('waitingRoomLoginLink');
 const privacyPolicyTitle = document.getElementById('privacyPolicyTitle');
 const stunTurnTitle = document.getElementById('stunTurnTitle');
 const clientTitle = document.getElementById('clientTitle');
@@ -60,10 +71,27 @@ let brand = {
         newCallRoomDescription:
             "Each room has its disposable URL. Just pick a room name and share your custom URL. It's that easy.",
         loginTitle: 'MiroTalk - Host Protected login required.',
+        loginHeading: 'Welcome back',
+        loginDescription: 'Enter your credentials to continue.',
+        loginButtonLabel: 'Login',
+        joinRoomTitle: 'Pick name.<br />Share URL.<br />Start conference.',
+        joinRoomButtonLabel: 'JOIN ROOM',
         clientTitle: 'MiroTalk WebRTC Video call, Chat Room & Screen Sharing.',
         privacyPolicyTitle: 'MiroTalk - privacy and policy.',
         stunTurnTitle: 'Test Stun/Turn Servers.',
         notFoundTitle: 'MiroTalk - 404 Page not found.',
+        waitingRoomTitle: 'MiroTalk - Waiting for host to start the meeting',
+        waitingRoomHeading: 'Waiting for host...',
+        waitingRoomDescription:
+            "The meeting hasn't started yet.<br />You'll join automatically when the host opens the room.",
+        waitingRoomStatus: 'Checking room status...',
+        waitingRoomReady: 'Room is ready! Joining...',
+        waitingRoomWaiting: 'Waiting for host to start the meeting...',
+        waitingRoomHostLink: 'Are you the host?',
+        waitingRoomLoginLink: 'Login here',
+        waitingRoomElapsedJust: 'Just started waiting',
+        waitingRoomElapsedMinutes: 'Waiting for {minutes}',
+        waitingRoomSongUrl: '',
     },
     html: {
         topSponsors: true,
@@ -79,7 +107,7 @@ let brand = {
     },
     about: {
         imageUrl: '../images/mirotalk-logo.gif',
-        title: 'WebRTC P2P v1.7.44',
+        title: 'WebRTC P2P v1.7.58',
         html: `
             <button 
                 id="support-button" 
@@ -224,11 +252,28 @@ function handleBrand() {
         newCallRoomDescription.textContent = brand.site.newCallRoomDescription;
 
     if (loginTitle && brand.site?.loginTitle) loginTitle.textContent = brand.site.loginTitle;
+    if (loginHeading && brand.site?.loginHeading) loginHeading.textContent = brand.site.loginHeading;
+    if (loginDescription && brand.site?.loginDescription) loginDescription.textContent = brand.site.loginDescription;
+    if (loginButtonLabel && brand.site?.loginButtonLabel) loginButtonLabel.textContent = brand.site.loginButtonLabel;
+    if (joinRoomTitle && brand.site?.joinRoomTitle) joinRoomTitle.innerHTML = brand.site.joinRoomTitle;
+    if (joinRoomButtonLabel && brand.site?.joinRoomButtonLabel)
+        joinRoomButtonLabel.textContent = brand.site.joinRoomButtonLabel;
     if (privacyPolicyTitle && brand.site?.privacyPolicyTitle)
         privacyPolicyTitle.textContent = brand.site.privacyPolicyTitle;
     if (stunTurnTitle && brand.site?.stunTurnTitle) stunTurnTitle.textContent = brand.site.stunTurnTitle;
     if (clientTitle && brand.site?.clientTitle) clientTitle.textContent = brand.site.clientTitle;
     if (notFoundTitle && brand.site?.notFoundTitle) notFoundTitle.textContent = brand.site.notFoundTitle;
+    if (waitingRoomTitle && brand.site?.waitingRoomTitle) waitingRoomTitle.textContent = brand.site.waitingRoomTitle;
+    if (waitingRoomHeading && brand.site?.waitingRoomHeading)
+        waitingRoomHeading.textContent = brand.site.waitingRoomHeading;
+    if (waitingRoomDescription && brand.site?.waitingRoomDescription)
+        waitingRoomDescription.innerHTML = brand.site.waitingRoomDescription;
+    if (waitingRoomStatus && brand.site?.waitingRoomStatus)
+        waitingRoomStatus.textContent = brand.site.waitingRoomStatus;
+    if (waitingRoomHostLink && brand.site?.waitingRoomHostLink)
+        waitingRoomHostLink.textContent = brand.site.waitingRoomHostLink;
+    if (waitingRoomLoginLink && brand.site?.waitingRoomLoginLink)
+        waitingRoomLoginLink.textContent = brand.site.waitingRoomLoginLink;
 
     if (shortcutIcon && brand.site?.shortcutIcon) shortcutIcon.href = brand.site.shortcutIcon;
     if (appleTouchIcon && brand.site?.appleTouchIcon) appleTouchIcon.href = brand.site.appleTouchIcon;

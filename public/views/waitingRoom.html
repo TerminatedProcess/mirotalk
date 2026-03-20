@@ -3,7 +3,7 @@
     <head>
         <!-- Title and Icon -->
 
-        <title id="loginTitle">MiroTalk - Host Protected login required.</title>
+        <title id="waitingRoomTitle">MiroTalk - Waiting for host to start the meeting</title>
         <link id="shortcutIcon" rel="shortcut icon" href="../images/logo.svg" />
         <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
 
@@ -16,10 +16,6 @@
         <meta
             name="description"
             content="MiroTalk powered by WebRTC, Real-time Simple Secure Fast video calls, chat and screen sharing capabilities in the browser, from your mobile or desktop."
-        />
-        <meta
-            name="keywords"
-            content="webrtc, self hosted, voip, sip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting"
         />
 
         <!-- https://ogp.me -->
@@ -36,16 +32,11 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:400,600" />
         <link rel="stylesheet" href="../css/landing.css" />
-        <link rel="stylesheet" href="../css/login.css" />
-        <link rel="stylesheet" href="../css/translate.css" />
+        <link rel="stylesheet" href="../css/newcall.css" />
 
         <!-- Js scripts -->
-
         <script async src="../js/stats.js"></script>
-        <script async src="../js/translate.js"></script>
-
-        <script src="https://unpkg.com/animejs@3.0.1/lib/anime.min.js"></script>
-        <script src="https://unpkg.com/scrollreveal@4.0.0/dist/scrollreveal.min.js"></script>
+        <script defer src="../js/brand.js"></script>
 
         <!-- xss -->
         <script src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
@@ -53,23 +44,24 @@
         <!-- axios -->
         <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
-        <!-- sweetalert -->
-        <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11.4.8"></script>
+        <link rel="stylesheet" href="../css/waitingRoom.css" />
     </head>
     <body class="has-animations">
-        <div id="google_translate_element"></div>
-
         <div class="body-wrap">
             <header class="site-header reveal-from-top">
                 <div class="container">
                     <div class="site-header-inner">
                         <div class="brand">
-                            <div class="m-0"></div>
+                            <div class="m-0">
+                                <a href="/">
+                                    <img src="../images/logo.svg" alt="MiroTalk P2P" width="32" height="32" />
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
             </header>
-            <main class="site-content mt-32">
+            <main class="site-content">
                 <section class="hero section illustration-section-01">
                     <div class="container">
                         <div class="hero-inner section-inner">
@@ -77,88 +69,61 @@
                                 <div class="split-item">
                                     <div class="hero-content split-item-content center-content-mobile">
                                         <div
-                                            id="loginForm"
-                                            class="login-card reveal-from-bottom"
+                                            class="waiting-card reveal-from-bottom"
                                             data-reveal-delay="150"
-                                            role="form"
-                                            aria-label="Login"
+                                            role="status"
+                                            aria-live="polite"
                                         >
-                                            <div class="login-icon">
-                                                <i class="fa-solid fa-lock"></i>
+                                            <div class="waiting-icon">
+                                                <i class="fa-solid fa-users"></i>
                                             </div>
-                                            <h2 id="loginHeading" class="login-title">Welcome back</h2>
-                                            <p id="loginDescription" class="login-description">
-                                                Enter your credentials to continue.
+                                            <h2 id="waitingRoomHeading" class="waiting-title">Waiting for host...</h2>
+                                            <p id="waitingRoomDescription" class="waiting-description">
+                                                The meeting hasn't started yet.<br />
+                                                You'll join automatically when the host opens the room.
                                             </p>
-                                            <div class="login-input-group">
-                                                <i class="fa-solid fa-user"></i>
-                                                <input
-                                                    id="username"
-                                                    class="form-input"
-                                                    type="name"
-                                                    placeholder="Username"
-                                                    maxlength="254"
-                                                    required
-                                                />
+                                            <div id="waitingRoomName" class="waiting-room-name" style="display: none">
+                                                <i class="fa-solid fa-door-open"></i>
+                                                <span id="waitingRoomNameText"></span>
                                             </div>
-                                            <div class="login-input-group">
-                                                <i class="fa-solid fa-key"></i>
-                                                <input
-                                                    id="password"
-                                                    class="form-input"
-                                                    type="password"
-                                                    maxlength="32"
-                                                    placeholder="Password"
-                                                    required
-                                                />
-                                                <i id="togglePassword" class="fa-solid fa-eye toggle-password"></i>
+                                            <div class="waiting-spinner">
+                                                <div class="waiting-spinner-dot"></div>
+                                                <div class="waiting-spinner-dot"></div>
+                                                <div class="waiting-spinner-dot"></div>
                                             </div>
-                                            <button id="loginButton" class="login-btn pulse">
-                                                <i class="fa-solid fa-right-to-bracket"></i>&nbsp;
-                                                <span id="loginButtonLabel">Login</span>
-                                            </button>
-                                        </div>
-                                        <!-- Join Room Section hidden -->
-                                        <div id="joinRoomForm" class="login-card">
-                                            <div class="login-icon">
-                                                <i class="fa-solid fa-video"></i>
-                                            </div>
-                                            <h2 id="joinRoomTitle" class="join-room-title">
-                                                Pick name.<br />
-                                                Share URL.<br />
-                                                Start conference.
-                                            </h2>
-                                            <div class="room-input-row">
-                                                <div class="login-input-group">
-                                                    <i class="fa-solid fa-door-open"></i>
-                                                    <input
-                                                        id="roomName"
-                                                        class="form-input"
-                                                        type="text"
-                                                        placeholder="Enter room name"
-                                                        maxlength="32"
-                                                        required
-                                                    />
+                                            <p class="waiting-status" id="waitingStatus" aria-live="assertive">
+                                                Checking room status...
+                                            </p>
+                                            <p class="waiting-elapsed" id="waitingElapsed">
+                                                <i class="fa-regular fa-clock"></i>
+                                                <span id="waitingElapsedText">Just started waiting</span>
+                                            </p>
+                                            <hr class="waiting-divider" />
+                                            <div
+                                                id="waitingAudioPlayer"
+                                                class="waiting-audio-player"
+                                                style="display: none"
+                                            >
+                                                <button
+                                                    id="waitingAudioBtn"
+                                                    class="waiting-audio-btn"
+                                                    title="Play music"
+                                                >
+                                                    <i id="waitingAudioIcon" class="fa-solid fa-play"></i>
+                                                </button>
+                                                <div class="waiting-audio-bar">
+                                                    <div id="waitingAudioProgress" class="waiting-audio-progress"></div>
                                                 </div>
-                                                <button
-                                                    id="randomRoomButton"
-                                                    class="random-room-btn"
-                                                    title="Generate random room name"
-                                                >
-                                                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                                                </button>
-                                                <button
-                                                    id="shareRoomButton"
-                                                    class="share-room-btn"
-                                                    title="Share room link"
-                                                >
-                                                    <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                                                <button id="waitingAudioMute" class="waiting-audio-btn" title="Mute">
+                                                    <i id="waitingAudioMuteIcon" class="fa-solid fa-volume-high"></i>
                                                 </button>
                                             </div>
-                                            <button id="joinSelectRoomButton" class="join-room-btn">
-                                                <i class="fa-solid fa-right-to-bracket"></i>&nbsp;
-                                                <span id="joinRoomButtonLabel">JOIN ROOM</span>
-                                            </button>
+                                            <p class="host-login-link" id="hostLoginLink">
+                                                <span id="waitingRoomHostLink">Are you the host?</span>
+                                                <a id="loginLink" href="/login"
+                                                    ><span id="waitingRoomLoginLink">Login here</span></a
+                                                >
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -172,7 +137,9 @@
                 <div class="container">
                     <div class="site-footer-inner">
                         <div class="footer-top space-between text-xxs">
-                            <div class="brand"></div>
+                            <div class="brand">
+                                <a href="/"><img src="../images/logo.svg" alt="Neon" width="32" height="32" /></a>
+                            </div>
                             <div class="footer-social">
                                 <ul class="list-reset">
                                     <li class="footer-social-icon">
@@ -288,10 +255,10 @@
             </footer>
         </div>
 
-        <script defer src="../js/utils.js"></script>
-        <script defer src="../js/login.js"></script>
-        <script defer src="../js/brand.js"></script>
+        <script src="https://unpkg.com/scrollreveal@4.0.0/dist/scrollreveal.min.js"></script>
         <script defer src="../js/landing.js"></script>
+        <script defer src="../js/waitingRoom.js"></script>
+        <script async src="../js/translate.js"></script>
         <script async defer src="https://buttons.github.io/buttons.js"></script>
     </body>
 </html>
