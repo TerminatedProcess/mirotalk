@@ -5,9 +5,11 @@ alias run='gitupdate;dcdown;dcup;ds'
 alias stop='dcdown'
 alias start='docker compose start'
 alias build='npm run docker-build'
+alias rebuild='dcdown && build && dcup && ds'
 
-alias rungrok='ngrok http 4321'
+alias rungrok='ngrok http 4321 --region us'
+alias ngrokup='paru -S ngrok'
 
 # Sync main and mryan with upstream mirotalk
-alias gitupdate='git remote get-url upstream &>/dev/null || git remote add upstream https://github.com/miroslavpejic85/mirotalk.git; git fetch upstream && git checkout master && git merge upstream/master && git checkout mryan && git merge master && git checkout mryan'
+alias gitupdate='git remote get-url upstream &>/dev/null || git remote add upstream https://github.com/miroslavpejic85/mirotalk.git; git fetch upstream && git checkout master && git merge upstream/master && git checkout mryan && git merge master && git checkout mryan && cp app/src/config.template.js app/src/config.js && echo "config.js updated from template"'
 
