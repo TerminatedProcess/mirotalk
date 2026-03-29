@@ -115,6 +115,10 @@ body {
 
 #google_translate_element select {
     background: var(--select-bg) !important;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #fff;
 }
 
 /*--------------------------------------------------------------
@@ -127,20 +131,71 @@ body {
     padding: 30px;
     text-align: center;
     border-radius: 10px;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--btns-bg-color, rgba(0, 0, 0, 0.7));
     box-shadow: var(--box-shadow);
 }
 #loadingDiv h1 {
     font-size: 60px;
     font-family: 'Montserrat';
 }
-#loadingDiv img {
-    margin-top: 5px;
-    margin-bottom: 5px;
-}
 #loadingDiv pre {
     padding: 5px;
     font-family: 'Montserrat';
+}
+
+/* Custom CSS spinner */
+.loading-spinner {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 15px;
+}
+
+.spinner-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #fff;
+    animation: spin 1s linear infinite;
+}
+
+.spinner-ring::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.05);
+    border-top-color: rgba(255, 255, 255, 0.6);
+    animation: spin 1.5s linear reverse infinite;
+}
+
+.spinner-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 48px;
+    height: 48px;
+    animation: pulse-logo 2s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse-logo {
+    0%,
+    100% {
+        opacity: 0.7;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.08);
+    }
 }
 
 /*--------------------------------------------------------------
@@ -161,6 +216,17 @@ body {
 .init-video-container {
     position: relative;
     width: 100%;
+}
+
+.init-video-loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
 }
 
 .init-video-container video {
@@ -195,10 +261,25 @@ body {
     padding: 10px;
     background: var(--select-bg) !important;
     color: white;
-    border: var(--border);
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     box-shadow: none;
     cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.init-user select:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.init-user select:focus {
+    outline: none;
+    border-color: rgba(70, 120, 249, 0.6);
+    box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
 }
 
 .init-user button {
@@ -209,7 +290,7 @@ body {
     font-size: 1.5rem;
     color: white;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     background-color: transparent;
 }
 
@@ -325,9 +406,15 @@ body {
     width: auto;
     font-size: 0.8em;
     padding: 8px 16px;
-    border-radius: 0;
+    border-radius: 8px;
     background: none;
-    transition: background 0.2s;
+    transition:
+        background 0.2s ease,
+        transform 0.15s ease;
+}
+
+#bottomButtons .dropdown-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 #bottomButtons .dropdown {
@@ -338,11 +425,13 @@ body {
     z-index: 9999;
     position: absolute;
     left: 0;
-    padding: 10px 5px;
+    padding: 8px;
     bottom: 45px;
-    border: var(--border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     background: var(--body-bg);
-    box-shadow: var(--box-shadow);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(12px);
 }
 
 #bottomButtons #audioMenu,
@@ -353,9 +442,29 @@ body {
 }
 
 #bottomButtons #settingsExtraMenu {
-    min-width: 200px;
+    min-width: 220px;
     max-width: calc(100vw - 24px);
     text-align: left;
+}
+
+#bottomButtons #settingsExtraMenu .device-menu-header.extra-menu-group {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 10px 16px 4px;
+    pointer-events: none;
+    user-select: none;
+}
+
+#bottomButtons #settingsExtraMenu button:hover {
+    transform: translateX(3px) !important;
+}
+
+#bottomButtons #settingsExtraMenu .extra-menu-divider.extra-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 6px 12px;
 }
 
 /* Mobile: keep settingsExtraMenu inside viewport and scrollable */
@@ -982,7 +1091,7 @@ body {
 
 .msger-copy-txt {
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     color: #fff;
     background: transparent;
 }
@@ -1066,7 +1175,7 @@ button {
 .msger-input-buttons button {
     padding: 5px 6px;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     font-size: 1rem;
     color: #fff;
     background: transparent;
@@ -1122,7 +1231,7 @@ button {
     min-width: 0;
     padding: 6px 8px;
     font-size: 14px;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background: rgba(0, 0, 0, 0.18);
     color: #fff;
@@ -1156,8 +1265,10 @@ button {
     width: 240px;
     min-width: 200px;
     background: var(--body-bg);
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
     padding: 6px 0;
     margin: 4px 35px 0px 0px;
 }
@@ -1178,7 +1289,7 @@ button {
     align-items: center;
     justify-content: center;
     padding: 0;
-    border-radius: 4px;
+    border-radius: 8px;
 }
 
 .msger-peer-inputarea .msgPrivate {
@@ -1316,7 +1427,7 @@ button {
 .msger-peer-inputarea * {
     padding: 5px;
     border: none;
-    border-radius: 3px;
+    border-radius: 8px;
     font-size: 1rem;
     margin: 1px;
     color: #fff;
@@ -1371,7 +1482,7 @@ button {
     z-index: 9999;
     background: var(--body-bg);
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     --rgb-background: var(--body-bg) !important;
     --color-border-over: var(--body-bg) !important;
     --font-family: 'Montserrat';
@@ -1384,7 +1495,7 @@ button {
     left: 10px;
     background: var(--body-bg);
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     --rgb-background: var(--body-bg) !important;
     --color-border-over: var(--body-bg) !important;
     --font-family: 'Montserrat';
@@ -1522,7 +1633,7 @@ button {
     color: white;
     background: var(--body-bg);
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
 }
 
 /*--------------------------------------------------------------
@@ -1598,7 +1709,7 @@ button {
         min-height: auto;
     }
     .mySettingsMain {
-        flex-direction: column;
+        flex-direction: row;
     }
 }
 
@@ -1666,20 +1777,34 @@ button {
     min-width: 150px;
     max-width: 310px;
     margin-top: 10px;
-    /* height: 40px; */
     background: var(--select-bg) !important;
     color: #fff;
-    border: var(--border);
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     box-shadow: none;
     cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+#mySettings select:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+#mySettings select:focus {
+    outline: none;
+    border-color: rgba(70, 120, 249, 0.6);
+    box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
 }
 
 #mySettingsCloseBtn {
     font-size: 1.2rem;
     color: #fff;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     float: right;
     background: transparent;
     transition: background 0.23s;
@@ -1714,11 +1839,26 @@ button {
     margin-top: 10px;
     margin-bottom: 20px;
     width: 130px;
-    border: var(--border);
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     background: var(--select-bg);
     color: white;
     cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+#themeColorPicker:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#themeColorPicker:focus {
+    outline: none;
+    border-color: rgba(70, 120, 249, 0.6);
+    box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
 }
 
 #keepCustomTheme {
@@ -1747,7 +1887,7 @@ button {
 
 .extra-info-container {
     margin-top: 15px;
-    border-radius: 5px;
+    border-radius: 8px;
     background: var(--body-bg);
     overflow-x: none;
     overflow-y: auto;
@@ -1769,7 +1909,7 @@ button {
     width: 50%;
     padding: 10px;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     color: #fff;
     background-color: rgba(0, 0, 0, 0.2);
 }
@@ -1791,7 +1931,7 @@ button {
     padding: 10px;
     font-size: 0.9rem;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     color: #fff;
     background-color: transparent;
 }
@@ -1808,7 +1948,7 @@ button {
     padding: 10px;
     font-size: 0.9rem;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     color: #fff;
     background-color: transparent;
 }
@@ -1893,7 +2033,7 @@ button {
 
 #mySettingsTable i {
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
 }
 
 #mySettingsTable select {
@@ -1935,9 +2075,9 @@ button {
 --------------------------------------------------------------*/
 
 .tab {
-    padding: 10px;
+    padding: 10px 10px 10px 0;
     overflow: hidden;
-    border-radius: 5px;
+    border-radius: 8px;
     width: 35%;
     background-color: var(--body-bg);
     min-height: 480px;
@@ -1953,11 +2093,17 @@ button {
 
 @media screen and (max-width: 830px) {
     .tab {
-        display: inline;
-        width: 100%;
+        display: flex;
+        flex-direction: column;
+        width: auto;
+        min-width: 50px;
         min-height: auto;
-        flex-direction: row;
-        border-right: none !important;
+    }
+    .tab button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
     }
     .tabActions {
         width: 100%;
@@ -1977,7 +2123,7 @@ button {
     color: #fff;
     font-size: 1rem;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     background-color: rgba(0, 0, 0, 0.2);
     outline: none;
     cursor: pointer;
@@ -2042,7 +2188,7 @@ button {
     height: 5px;
     margin: 0 2px;
     background-color: #ddd;
-    border-radius: 5px;
+    border-radius: 8px;
     transition: all 0.3s ease;
 }
 
@@ -2119,8 +2265,14 @@ input:checked + .slider:before {
 --------------------------------------------------------------*/
 
 .swal2-popup {
-    border: var(--border) !important;
-    /* box-shadow: var(--box-shadow) !important; */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(12px);
+}
+
+.swal2-popup .swal2-styled {
+    border-radius: 12px !important;
 }
 
 .swal2-popup .swal2-styled:focus {
@@ -2138,12 +2290,14 @@ input:checked + .slider:before {
 
 .swal2-input {
     border: var(--border) !important;
+    border-radius: 12px !important;
     box-shadow: none !important;
 }
 
 .swal2-file {
     color: white !important;
     background-color: transparent !important;
+    border-radius: 12px !important;
 }
 
 .swal2-html-container {
@@ -2154,15 +2308,27 @@ input:checked + .slider:before {
 .swal2-select {
     background-color: var(--select-bg) !important;
     color: white !important;
-    border-radius: 6px !important;
+    border-radius: 12px !important;
 }
 
 .swal2-timer-progress-bar-container {
     background: var(--body-bg);
+    border-radius: 0 0 20px 20px !important;
+    overflow: hidden !important;
 }
 
 .swal2-timer-progress-bar {
     background-color: #1d8ecd !important;
+}
+
+.swal2-input:-webkit-autofill,
+.swal2-input:-webkit-autofill:hover,
+.swal2-input:-webkit-autofill:focus,
+.swal2-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #000000 inset !important;
+    -webkit-text-fill-color: #fff !important;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: #fff;
 }
 
 .img-about {
@@ -2269,7 +2435,7 @@ input:checked + .slider:before {
     z-index: 17;
     display: none;
     min-width: 320px;
-    border-radius: 5px;
+    border-radius: 12px;
     margin: auto;
     padding: 10px;
     color: #fff;
@@ -2285,7 +2451,7 @@ input:checked + .slider:before {
     margin-top: 10px;
     padding: 5px;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     font-size: 1rem;
     color: #fff;
     background-color: transparent;
@@ -2336,7 +2502,7 @@ progress {
     height: var(--iframe-height);
     border: var(--border);
     box-shadow: var(--box-shadow);
-    border-radius: 5px;
+    border-radius: 12px;
 }
 
 #videoAudioUrlHeader,
@@ -2348,7 +2514,7 @@ progress {
     top: 0px;
     width: 100%;
     cursor: move;
-    border-radius: 5px;
+    border-radius: 12px;
 }
 
 #videoAudioUrlHeader button,
@@ -2373,13 +2539,13 @@ progress {
 #videoUrlIframe {
     width: var(--iframe-width);
     height: var(--iframe-height);
-    border-radius: 5px;
+    border-radius: 12px;
 }
 
 #videoAudioUrlElement {
     width: var(--iframe-width);
     height: var(--iframe-height) - 20px;
-    border-radius: 5px;
+    border-radius: 12px;
 }
 
 /*--------------------------------------------------------------
@@ -2411,7 +2577,7 @@ progress {
     width: 170px;
     height: 40px;
     font-size: 1.2rem;
-    border-radius: 6px;
+    border-radius: 8px;
     color: #ffffff;
     background: linear-gradient(65deg, #376df9 0, #ff5fa0 100%);
     transition: background 0.23s;
@@ -2466,7 +2632,26 @@ progress {
     color: #ffffff;
     font-size: small;
     max-width: 135px;
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 6px 10px;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+#recognitionDialect:hover,
+#recognitionLanguage:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#recognitionDialect:focus,
+#recognitionLanguage:focus {
+    outline: none;
+    border-color: rgba(70, 120, 249, 0.6);
+    box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
 }
 
 /*--------------------------------------------------------------
@@ -2491,8 +2676,28 @@ progress {
 select {
     height: 40px;
     font-size: 0.9rem;
-    line-height: 40px;
+    padding: 0 10px;
     box-shadow: none;
+    color: #fff;
+    background: var(--select-bg);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+select:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+select:focus {
+    outline: none;
+    border-color: rgba(70, 120, 249, 0.6);
+    box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
 }
 
 hr {
@@ -2617,10 +2822,18 @@ hr {
 .dropdown-toggle {
     /* padding: 10px 20px; */
     color: #fff;
-    border: none;
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
     background-color: var(--body-bg);
     cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.dropdown-toggle:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 /* Styles for the dropdown menu container */
@@ -2628,9 +2841,11 @@ hr {
     display: none;
     margin-top: 5px;
     margin-bottom: 20px;
-    border: none;
-    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
     background-color: var(--body-bg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
 }
 
 /*--------------------------------------------------------------
@@ -2650,9 +2865,18 @@ hr {
 /* Style the button that triggers the dropdown */
 .dropdown-toggle-custom {
     color: #fff;
-    border: var(--border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
     background: var(--body-bg);
     cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.dropdown-toggle-custom:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 /* Dropdown menu */
@@ -2660,11 +2884,13 @@ hr {
     display: none;
     position: fixed;
     right: 0;
-    padding: 10px 0;
+    padding: 8px;
     min-width: 240px;
-    border-radius: 5px;
-    border: none;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     background: var(--body-bg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
     z-index: 9999;
 }
 
@@ -2687,10 +2913,12 @@ hr {
     font-size: 0.8em;
     cursor: pointer;
     color: #fff;
+    border-radius: 8px;
+    transition: background 0.2s ease;
 }
 
 .dropdown-menu-custom li button:hover {
-    background: var(--select-bg) !important;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* Styles for table cell with title (td) */
@@ -2705,7 +2933,7 @@ hr {
     margin: 5px;
     color: #fff;
     border: var(--border);
-    border-radius: 5px;
+    border-radius: 8px;
     background: var(--body-bg);
     cursor: pointer;
 }
@@ -2726,7 +2954,7 @@ hr {
 
 ::-webkit-scrollbar-thumb {
     background: var(--body-bg);
-    border-radius: 5px;
+    border-radius: 8px;
     cursor: pointer;
 }
 

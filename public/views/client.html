@@ -85,9 +85,12 @@
 
         <!-- show this before to join -->
 
-        <div id="loadingDiv" class="center pulsate">
+        <div id="loadingDiv" class="center">
+            <div class="loading-spinner">
+                <div class="spinner-ring"></div>
+                <img class="spinner-logo" src="../images/logo.svg" alt="logo" />
+            </div>
             <h1>Loading</h1>
-            <img class="loading-img" src="../images/loading.gif" />
             <pre>
 Please allow the camera or microphone
 access to use this app.
@@ -106,13 +109,13 @@ access to use this app.
         <div id="initUser" class="init-user hidden">
             <!-- <p>Please allow the camera & microphone access to use this app.</p> -->
             <div id="initVideoContainer" class="init-video-container">
-                <video
-                    id="initVideo"
-                    playsinline="true"
-                    autoplay=""
-                    class="mirror"
-                    poster="../images/loader.gif"
-                ></video>
+                <div id="initVideoLoader" class="init-video-loader">
+                    <div class="loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <img class="spinner-logo" src="../images/logo.svg" alt="logo" />
+                    </div>
+                </div>
+                <video id="initVideo" playsinline="true" autoplay="" class="mirror"></video>
             </div>
             <div class="initComands">
                 <button id="initVideoBtn" class="fas fa-video"></button>
@@ -192,17 +195,47 @@ access to use this app.
                         class="dropdown-menu text-start hidden"
                         aria-labelledby="settingsExtraToggle"
                     >
-                        <!-- https://fontawesome.com/icons?d=gallery -->
+                        <!-- SHARING -->
+                        <div class="device-menu-header extra-menu-group" data-buttons="shareRoomBtn,fileShareBtn">
+                            SHARING
+                        </div>
                         <button id="shareRoomBtn"><i class="fas fa-share-alt"></i> Share Room</button>
-                        <button id="hideMeBtn"><i class="fas fa-user"></i> Hide Me</button>
-                        <button id="recordStreamBtn"><i class="fas fa-record-vinyl"></i> Recording</button>
-                        <button id="fullScreenBtn"><i class="fas fa-expand-alt"></i> Full screen</button>
-                        <button id="roomEmojiPickerBtn"><i class="fas fa-face-smile"></i> Room Emoji</button>
-                        <button id="captionBtn"><i class="fas fa-closed-captioning"></i> Caption</button>
-                        <button id="whiteboardBtn"><i class="fas fa-chalkboard-teacher"></i> Whiteboard</button>
+                        <button id="fileShareBtn"><i class="fas fa-folder-open"></i> File sharing</button>
+
+                        <div class="device-menu-divider extra-menu-divider" data-group="sharing"></div>
+
+                        <!-- RECORDING & CAPTURE -->
+                        <div class="device-menu-header extra-menu-group" data-buttons="recordStreamBtn,snapshotRoomBtn">
+                            RECORDING & CAPTURE
+                        </div>
+                        <button id="recordStreamBtn"><i class="fas fa-record-vinyl"></i> Start Recording</button>
                         <button id="snapshotRoomBtn"><i class="fas fa-camera-retro"></i> Snapshot</button>
-                        <button id="fileShareBtn"><i class="fas fa-folder-open"></i> File Share</button>
+
+                        <div class="device-menu-divider extra-menu-divider" data-group="recording"></div>
+
+                        <!-- TOOLS -->
+                        <div
+                            class="device-menu-header extra-menu-group"
+                            data-buttons="captionBtn,whiteboardBtn,documentPiPBtn,roomEmojiPickerBtn"
+                        >
+                            TOOLS
+                        </div>
+                        <button id="captionBtn"><i class="fas fa-closed-captioning"></i> Transcription</button>
+                        <button id="whiteboardBtn"><i class="fas fa-chalkboard-teacher"></i> Whiteboard</button>
                         <button id="documentPiPBtn"><i class="fas fa-images"></i> Document PiP</button>
+                        <button id="roomEmojiPickerBtn"><i class="fas fa-face-smile"></i> Room Emoji</button>
+
+                        <div class="device-menu-divider extra-menu-divider" data-group="tools"></div>
+
+                        <!-- VIEW & SETTINGS -->
+                        <div
+                            class="device-menu-header extra-menu-group"
+                            data-buttons="hideMeBtn,fullScreenBtn,aboutBtn"
+                        >
+                            VIEW & SETTINGS
+                        </div>
+                        <button id="hideMeBtn"><i class="fas fa-user"></i> Hide Me</button>
+                        <button id="fullScreenBtn"><i class="fas fa-expand-alt"></i> Full Screen</button>
                         <button id="aboutBtn"><i class="fas fa-question"></i> About</button>
                     </div>
                 </div>

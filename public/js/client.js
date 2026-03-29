@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.7.60
+ * @version 1.7.69
  *
  */
 
@@ -2047,6 +2047,10 @@ function detectCameraFacingMode(stream) {
  * @param {string} deviceId
  */
 async function changeInitCamera(deviceId) {
+    // Show the loader spinner while switching camera
+    const initVideoLoader = getId('initVideoLoader');
+    if (initVideoLoader) initVideoLoader.style.display = '';
+
     // Stop media tracks to avoid issue on mobile
     if (initStream) {
         await stopTracks(initStream);
@@ -2093,6 +2097,9 @@ async function changeInitCamera(deviceId) {
             console.log('Detect Camera facing mode', camera);
             // We going to update init video stream
             initVideo.srcObject = camStream;
+            // Hide the CSS loader overlay once camera stream is attached
+            const initVideoLoader = getId('initVideoLoader');
+            if (initVideoLoader) initVideoLoader.style.display = 'none';
             initStream = camStream;
             const initVideoTrack = getVideoTrack(initStream);
             if (initVideoTrack) {
@@ -2130,6 +2137,11 @@ async function changeInitCamera(deviceId) {
  * @param {string} deviceId
  */
 async function changeLocalCamera(deviceId) {
+    // Show loading spinner while switching camera
+    const myVideoWrap = getId('myVideoWrap');
+    let spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
+    if (spinner) spinner.style.display = '';
+
     if (localVideoMediaStream) {
         await stopVideoTracks(localVideoMediaStream);
     }
@@ -2159,6 +2171,8 @@ async function changeLocalCamera(deviceId) {
             } catch (fallbackErr) {
                 console.error('Error accessing init video device with default constraints', fallbackErr);
                 printError(err);
+                // Hide loading spinner on error
+                if (spinner) spinner.style.display = 'none';
             }
         });
 
@@ -2176,6 +2190,8 @@ async function changeLocalCamera(deviceId) {
             await refreshMyStreamToPeers(camStream);
             setLocalMaxFps(videoMaxFrameRate);
         }
+        // Hide loading spinner
+        if (spinner) spinner.style.display = 'none';
     }
 
     /**
@@ -3067,178 +3083,179 @@ function setTheme() {
     const theme = mirotalkTheme.value;
     switch (theme) {
         case 'dark':
-            // dark theme
-            swBg = 'radial-gradient(#393939, #000000)';
-            setSP('--body-bg', 'radial-gradient(#393939, #000000)');
-            setSP('--msger-bg', 'radial-gradient(#393939, #000000)');
-            setSP('--msger-private-bg', 'radial-gradient(#393939, #000000)');
-            setSP('--wb-bg', 'radial-gradient(#393939, #000000)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(28, 28, 28, 0.8)');
-            setSP('--select-bg', '#3a3a3a');
-            setSP('--tab-btn-active', '#4f4f4f');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--left-msg-bg', '#353535');
-            setSP('--right-msg-bg', '#4a4a4a');
-            setSP('--private-msg-bg', '#2a2a2a');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(0, 0, 0, 0.7)');
-            setSP('--dd-color', '#FFFFFF');
-            document.body.style.background = 'radial-gradient(#393939, #000000)';
+            // dark theme — refined neutral with subtle warm undertone
+            swBg = 'radial-gradient(#2a2a2e, #121214)';
+            setSP('--body-bg', 'radial-gradient(#2a2a2e, #121214)');
+            setSP('--msger-bg', 'radial-gradient(#2a2a2e, #121214)');
+            setSP('--msger-private-bg', 'radial-gradient(#2a2a2e, #121214)');
+            setSP('--wb-bg', 'radial-gradient(#2a2a2e, #121214)');
+            setSP('--elem-border-color', '1px solid rgba(255, 255, 255, 0.08)');
+            setSP('--navbar-bg', 'rgba(18, 18, 20, 0.85)');
+            setSP('--select-bg', '#333338');
+            setSP('--tab-btn-active', '#3d3d42');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--left-msg-bg', '#2c2c30');
+            setSP('--right-msg-bg', '#3a3a40');
+            setSP('--private-msg-bg', '#252528');
+            setSP('--btn-bar-bg-color', '#E8E8EC');
+            setSP('--btn-bar-color', '#121214');
+            setSP('--btns-bg-color', 'rgba(18, 18, 20, 0.75)');
+            setSP('--dd-color', '#E8E8EC');
+            document.body.style.background = 'radial-gradient(#2a2a2e, #121214)';
             mirotalkTheme.selectedIndex = 0;
             break;
         case 'grey':
-            // grey theme
-            swBg = 'radial-gradient(#4f4f4f, #1c1c1c)';
-            setSP('--body-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--msger-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--wb-bg', 'radial-gradient(#5f5f5f, #2c2c2c)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(28, 28, 28, 0.8)');
-            setSP('--select-bg', '#3a3a3a');
-            setSP('--tab-btn-active', '#4f4f4f');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#353535');
-            setSP('--right-msg-bg', '#4a4a4a');
-            setSP('--private-msg-bg', '#616161');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(0, 0, 0, 0.7)');
-            setSP('--dd-color', '#FFFFFF');
-            document.body.style.background = 'radial-gradient(#4f4f4f, #1c1c1c)';
+            // grey theme — modern slate with balanced cool tones
+            swBg = 'radial-gradient(#3b3f47, #1e2028)';
+            setSP('--body-bg', 'radial-gradient(#3b3f47, #1e2028)');
+            setSP('--msger-bg', 'radial-gradient(#3b3f47, #1e2028)');
+            setSP('--wb-bg', 'radial-gradient(#434750, #252830)');
+            setSP('--elem-border-color', '1px solid rgba(255, 255, 255, 0.08)');
+            setSP('--navbar-bg', 'rgba(30, 32, 40, 0.85)');
+            setSP('--select-bg', '#32363e');
+            setSP('--tab-btn-active', '#484c55');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.45)');
+            setSP('--msger-private-bg', 'radial-gradient(#3b3f47, #1e2028)');
+            setSP('--left-msg-bg', '#33373f');
+            setSP('--right-msg-bg', '#434750');
+            setSP('--private-msg-bg', '#2d3038');
+            setSP('--btn-bar-bg-color', '#E8E8EC');
+            setSP('--btn-bar-color', '#1e2028');
+            setSP('--btns-bg-color', 'rgba(30, 32, 40, 0.75)');
+            setSP('--dd-color', '#E0E0E6');
+            document.body.style.background = 'radial-gradient(#3b3f47, #1e2028)';
             mirotalkTheme.selectedIndex = 1;
             break;
         case 'green':
-            // green theme
-            swBg = 'radial-gradient(#004d40, #001f1c)';
-            setSP('--body-bg', 'radial-gradient(#004d40, #001f1c)');
-            setSP('--msger-bg', 'radial-gradient(#004d40, #001f1c)');
-            setSP('--wb-bg', 'radial-gradient(#004d40, #001f1c)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(0, 31, 28, 0.8)');
-            setSP('--select-bg', '#002e2b');
-            setSP('--tab-btn-active', '#004d40');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#004d40');
-            setSP('--right-msg-bg', '#00312c');
-            setSP('--private-msg-bg', '#004a47');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(0, 42, 34, 0.7)');
-            setSP('--dd-color', '#00FF00');
-            document.body.style.background = 'radial-gradient(#004d40, #001f1c)';
+            // green theme — modern emerald with depth
+            swBg = 'radial-gradient(#1a3a32, #0d1f1a)';
+            setSP('--body-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
+            setSP('--msger-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
+            setSP('--wb-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
+            setSP('--elem-border-color', '1px solid rgba(72, 199, 154, 0.15)');
+            setSP('--navbar-bg', 'rgba(13, 31, 26, 0.88)');
+            setSP('--select-bg', '#17332b');
+            setSP('--tab-btn-active', '#22493e');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
+            setSP('--left-msg-bg', '#1e3f36');
+            setSP('--right-msg-bg', '#14302a');
+            setSP('--private-msg-bg', '#153028');
+            setSP('--btn-bar-bg-color', '#E8F5E9');
+            setSP('--btn-bar-color', '#0d1f1a');
+            setSP('--btns-bg-color', 'rgba(13, 31, 26, 0.75)');
+            setSP('--dd-color', '#48C79A');
+            document.body.style.background = 'radial-gradient(#1a3a32, #0d1f1a)';
             mirotalkTheme.selectedIndex = 2;
             break;
         case 'blue':
-            // blue theme
-            swBg = 'radial-gradient(#1a237e, #0d1b34)';
-            setSP('--body-bg', 'radial-gradient(#1a237e, #0d1b34)');
-            setSP('--msger-bg', 'radial-gradient(#1a237e, #0d1b34)');
-            setSP('--wb-bg', 'radial-gradient(#1a237e, #0d1b34)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(13, 27, 52, 0.8)');
-            setSP('--select-bg', '#0d1b34');
-            setSP('--tab-btn-active', '#1a237e');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#1a237e');
-            setSP('--right-msg-bg', '#0d1b34');
-            setSP('--private-msg-bg', '#1a237e');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(0, 39, 77, 0.7)');
-            setSP('--dd-color', '#1E90FF');
-            document.body.style.background = 'radial-gradient(#1a237e, #0d1b34)';
+            // blue theme — modern deep blue with clarity
+            swBg = 'radial-gradient(#1b2a4a, #0f1729)';
+            setSP('--body-bg', 'radial-gradient(#1b2a4a, #0f1729)');
+            setSP('--msger-bg', 'radial-gradient(#1b2a4a, #0f1729)');
+            setSP('--wb-bg', 'radial-gradient(#1b2a4a, #0f1729)');
+            setSP('--elem-border-color', '1px solid rgba(96, 165, 250, 0.15)');
+            setSP('--navbar-bg', 'rgba(15, 23, 41, 0.88)');
+            setSP('--select-bg', '#182440');
+            setSP('--tab-btn-active', '#243656');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#1b2a4a, #0f1729)');
+            setSP('--left-msg-bg', '#1e2e50');
+            setSP('--right-msg-bg', '#152038');
+            setSP('--private-msg-bg', '#172545');
+            setSP('--btn-bar-bg-color', '#E3F2FD');
+            setSP('--btn-bar-color', '#0f1729');
+            setSP('--btns-bg-color', 'rgba(15, 23, 41, 0.75)');
+            setSP('--dd-color', '#60A5FA');
+            document.body.style.background = 'radial-gradient(#1b2a4a, #0f1729)';
             mirotalkTheme.selectedIndex = 3;
             break;
         case 'red':
-            // red theme
-            swBg = 'radial-gradient(#8B0000, #320000)';
-            setSP('--body-bg', 'radial-gradient(#8B0000, #320000)');
-            setSP('--msger-bg', 'radial-gradient(#8B0000, #320000)');
-            setSP('--wb-bg', 'radial-gradient(#8B0000, #320000)');
-            setSP('--navbar-bg', 'rgba(50, 0, 0, 0.8)');
-            setSP('--select-bg', '#320000');
-            setSP('--tab-btn-active', '#8B0000');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#8B0000');
-            setSP('--right-msg-bg', '#4B0000');
-            setSP('--private-msg-bg', '#8B0000');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(42, 13, 13, 0.7)');
-            setSP('--dd-color', '#FF4500');
-            document.body.style.background = 'radial-gradient(#8B0000, #320000)';
+            // red theme — modern crimson with warmth
+            swBg = 'radial-gradient(#3d1520, #1c0a10)';
+            setSP('--body-bg', 'radial-gradient(#3d1520, #1c0a10)');
+            setSP('--msger-bg', 'radial-gradient(#3d1520, #1c0a10)');
+            setSP('--wb-bg', 'radial-gradient(#3d1520, #1c0a10)');
+            setSP('--elem-border-color', '1px solid rgba(248, 113, 113, 0.15)');
+            setSP('--navbar-bg', 'rgba(28, 10, 16, 0.88)');
+            setSP('--select-bg', '#35121c');
+            setSP('--tab-btn-active', '#4d1a28');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#3d1520, #1c0a10)');
+            setSP('--left-msg-bg', '#421824');
+            setSP('--right-msg-bg', '#2e1018');
+            setSP('--private-msg-bg', '#381420');
+            setSP('--btn-bar-bg-color', '#FDE8E8');
+            setSP('--btn-bar-color', '#1c0a10');
+            setSP('--btns-bg-color', 'rgba(28, 10, 16, 0.75)');
+            setSP('--dd-color', '#F87171');
+            document.body.style.background = 'radial-gradient(#3d1520, #1c0a10)';
             mirotalkTheme.selectedIndex = 4;
             break;
         case 'purple':
-            // purple theme
-            swBg = 'radial-gradient(#4B0082, #2C003E)';
-            setSP('--body-bg', 'radial-gradient(#4B0082, #2C003E)');
-            setSP('--msger-bg', 'radial-gradient(#4B0082, #2C003E)');
-            setSP('--wb-bg', 'radial-gradient(#4B0082, #2C003E)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(44, 0, 62, 0.8)');
-            setSP('--select-bg', '#2C003E');
-            setSP('--tab-btn-active', '#4B0082');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#4B0082');
-            setSP('--right-msg-bg', '#2C003E');
-            setSP('--private-msg-bg', '#4B0082');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(42, 0, 29, 0.7)');
-            setSP('--dd-color', '#BF00FF');
-            document.body.style.background = 'radial-gradient(#4B0082, #2C003E)';
+            // purple theme — modern violet with elegance
+            swBg = 'radial-gradient(#2a1840, #150d24)';
+            setSP('--body-bg', 'radial-gradient(#2a1840, #150d24)');
+            setSP('--msger-bg', 'radial-gradient(#2a1840, #150d24)');
+            setSP('--wb-bg', 'radial-gradient(#2a1840, #150d24)');
+            setSP('--elem-border-color', '1px solid rgba(192, 132, 252, 0.15)');
+            setSP('--navbar-bg', 'rgba(21, 13, 36, 0.88)');
+            setSP('--select-bg', '#241538');
+            setSP('--tab-btn-active', '#351f4e');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#2a1840, #150d24)');
+            setSP('--left-msg-bg', '#2e1c45');
+            setSP('--right-msg-bg', '#201230');
+            setSP('--private-msg-bg', '#28163c');
+            setSP('--btn-bar-bg-color', '#F3E8FD');
+            setSP('--btn-bar-color', '#150d24');
+            setSP('--btns-bg-color', 'rgba(21, 13, 36, 0.75)');
+            setSP('--dd-color', '#C084FC');
+            document.body.style.background = 'radial-gradient(#2a1840, #150d24)';
             mirotalkTheme.selectedIndex = 5;
             break;
         case 'orange':
-            // orange theme
-            swBg = 'radial-gradient(#FF8C00, #4B1C00)';
-            setSP('--body-bg', 'radial-gradient(#FF8C00, #4B1C00)');
-            setSP('--msger-bg', 'radial-gradient(#FF8C00, #4B1C00)');
-            setSP('--wb-bg', 'radial-gradient(#FF8C00, #4B1C00)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(75, 28, 0, 0.8)');
-            setSP('--select-bg', '#4B1C00');
-            setSP('--tab-btn-active', '#FF8C00');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#FF8C00');
-            setSP('--right-msg-bg', '#4B1C00');
-            setSP('--private-msg-bg', '#FF8C00');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(61, 26, 0, 0.7)');
-            setSP('--dd-color', '#FFA500');
-            document.body.style.background = 'radial-gradient(#FF8C00, #4B1C00)';
+            // orange theme — modern amber with depth
+            swBg = 'radial-gradient(#3d2410, #1e1208)';
+            setSP('--body-bg', 'radial-gradient(#3d2410, #1e1208)');
+            setSP('--msger-bg', 'radial-gradient(#3d2410, #1e1208)');
+            setSP('--wb-bg', 'radial-gradient(#3d2410, #1e1208)');
+            setSP('--elem-border-color', '1px solid rgba(251, 191, 36, 0.15)');
+            setSP('--navbar-bg', 'rgba(30, 18, 8, 0.88)');
+            setSP('--select-bg', '#352010');
+            setSP('--tab-btn-active', '#4d3018');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#3d2410, #1e1208)');
+            setSP('--left-msg-bg', '#422814');
+            setSP('--right-msg-bg', '#2e1c0e');
+            setSP('--private-msg-bg', '#382210');
+            setSP('--btn-bar-bg-color', '#FFF3E0');
+            setSP('--btn-bar-color', '#1e1208');
+            setSP('--btns-bg-color', 'rgba(30, 18, 8, 0.75)');
+            setSP('--dd-color', '#FBBF24');
+            document.body.style.background = 'radial-gradient(#3d2410, #1e1208)';
             mirotalkTheme.selectedIndex = 6;
             break;
         case 'yellow':
-            // yellow theme
-            swBg = 'radial-gradient(#FFD700, #3B3B00)';
-            setSP('--body-bg', 'radial-gradient(#FFD700, #3B3B00)');
-            setSP('--msger-bg', 'radial-gradient(#FFD700, #3B3B00)');
-            setSP('--wb-bg', 'radial-gradient(#FFD700, #3B3B00)');
-            setSP('--elem-border-color', 'none');
-            setSP('--navbar-bg', 'rgba(59, 59, 0, 0.8)');
-            setSP('--select-bg', '#3B3B00');
-            setSP('--tab-btn-active', '#FFD700');
-            setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.4)');
-            setSP('--msger-private-bg', 'radial-gradient(#4f4f4f, #1c1c1c)');
-            setSP('--left-msg-bg', '#FFD700');
-            setSP('--right-msg-bg', '#B8860B');
-            setSP('--private-msg-bg', '#FFD700');
-            setSP('--btn-bar-bg-color', '#FFFFFF');
-            setSP('--btn-bar-color', '#000000');
-            setSP('--btns-bg-color', 'rgba(77, 59, 0, 0.7)');
-            setSP('--dd-color', '#FFD700');
-            document.body.style.background = 'radial-gradient(#FFD700, #3B3B00)';
+            // yellow theme — modern gold with sophistication
+            swBg = 'radial-gradient(#3a3418, #1e1c0e)';
+            setSP('--body-bg', 'radial-gradient(#3a3418, #1e1c0e)');
+            setSP('--msger-bg', 'radial-gradient(#3a3418, #1e1c0e)');
+            setSP('--wb-bg', 'radial-gradient(#3a3418, #1e1c0e)');
+            setSP('--elem-border-color', '1px solid rgba(250, 204, 21, 0.15)');
+            setSP('--navbar-bg', 'rgba(30, 28, 14, 0.88)');
+            setSP('--select-bg', '#322e15');
+            setSP('--tab-btn-active', '#4a441e');
+            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
+            setSP('--msger-private-bg', 'radial-gradient(#3a3418, #1e1c0e)');
+            setSP('--left-msg-bg', '#3e381c');
+            setSP('--right-msg-bg', '#2c2812');
+            setSP('--private-msg-bg', '#363018');
+            setSP('--btn-bar-bg-color', '#FFFDE7');
+            setSP('--btn-bar-color', '#1e1c0e');
+            setSP('--btns-bg-color', 'rgba(30, 28, 14, 0.75)');
+            setSP('--dd-color', '#FACC15');
+            document.body.style.background = 'radial-gradient(#3a3418, #1e1c0e)';
             mirotalkTheme.selectedIndex = 7;
             break;
         // ...
@@ -3756,7 +3773,7 @@ async function loadLocalMedia(stream, kind) {
             // my hand status element
             myHandStatusIcon.setAttribute('id', 'myHandStatusIcon');
             myHandStatusIcon.className = className.handPulsate;
-            myHandStatusIcon.style.setProperty('color', 'rgb(0, 255, 0)');
+            myHandStatusIcon.style.setProperty('color', '#FFD700');
 
             // my privacy button
             myPrivacyBtn.setAttribute('id', 'myPrivacyBtn');
@@ -3869,7 +3886,6 @@ async function loadLocalMedia(stream, kind) {
             myLocalMedia.muted = true;
             myLocalMedia.volume = 0;
             myLocalMedia.controls = false;
-            myLocalMedia.poster = images.poster;
 
             myVideoWrap.className = 'Camera';
             myVideoWrap.setAttribute('id', 'myVideoWrap');
@@ -3880,6 +3896,8 @@ async function loadLocalMedia(stream, kind) {
             myVideoWrap.appendChild(myLocalMedia);
             myVideoWrap.appendChild(myPitchMeter);
             myVideoWrap.appendChild(myVideoPeerName);
+
+            createVideoLoadingSpinner(myVideoWrap, myLocalMedia);
 
             videoMediaContainer.appendChild(myVideoWrap);
             elemDisplay(myVideoWrap, false);
@@ -4031,7 +4049,6 @@ async function loadLocalMedia(stream, kind) {
             myScreenMedia.muted = true;
             myScreenMedia.volume = 0;
             myScreenMedia.controls = false;
-            myScreenMedia.poster = images.poster;
 
             myScreenWrap.className = 'Screen';
             myScreenWrap.setAttribute('id', 'myScreenWrap');
@@ -4041,6 +4058,8 @@ async function loadLocalMedia(stream, kind) {
             myScreenWrap.appendChild(myScreenAvatarImage);
             myScreenWrap.appendChild(myScreenMedia);
             myScreenWrap.appendChild(myScreenPeerName);
+
+            createVideoLoadingSpinner(myScreenWrap, myScreenMedia);
 
             videoMediaContainer.appendChild(myScreenWrap);
             // Show my screen tile immediately when created
@@ -4200,7 +4219,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
 
             // remote hand status element
             remoteHandStatusIcon.setAttribute('id', peer_id + '_handStatus');
-            remoteHandStatusIcon.style.setProperty('color', 'rgb(0, 255, 0)');
+            remoteHandStatusIcon.style.setProperty('color', '#FFD700');
             remoteHandStatusIcon.className = className.handPulsate;
 
             // remote video status element
@@ -4359,7 +4378,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteMedia.style.objectFit = 'var(--video-object-fit)';
             remoteMedia.style.name = peer_id + '_typeCam';
             remoteMedia.controls = remoteMediaControls;
-            remoteMedia.poster = images.poster;
 
             remoteVideoWrap.className = 'Camera';
             remoteVideoWrap.setAttribute('id', peer_id + '_videoWrap');
@@ -4371,6 +4389,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteVideoWrap.appendChild(remotePitchMeter);
             remoteVideoWrap.appendChild(remoteMedia);
             remoteVideoWrap.appendChild(remotePeerName);
+
+            createVideoLoadingSpinner(remoteVideoWrap, remoteMedia);
 
             // need later on disconnect or remove peers
             peerVideoMediaElements[remoteMedia.id] = remoteVideoWrap;
@@ -4574,8 +4594,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteScreenMedia.style.objectFit = 'contain';
             remoteScreenMedia.style.name = peer_id + '_typeScreen';
 
-            remoteScreenMedia.poster = images.poster;
-
             remoteScreenWrap.className = 'Screen';
             remoteScreenWrap.setAttribute('id', peer_id + '_screenWrap');
             remoteScreenWrap.style.display = isHideALLVideosActive ? 'none' : 'block';
@@ -4584,6 +4602,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteScreenWrap.appendChild(remoteScreenAvatarImage);
             remoteScreenWrap.appendChild(remoteScreenMedia);
             remoteScreenWrap.appendChild(remoteScreenPeerName);
+
+            createVideoLoadingSpinner(remoteScreenWrap, remoteScreenMedia);
 
             // need later on disconnect or remove peers
             peerScreenMediaElements[remoteScreenMedia.id] = remoteScreenWrap;
@@ -6729,6 +6749,7 @@ function setMySettingsExtraBtns() {
         let hideTimeout;
         function showMenu() {
             clearTimeout(hideTimeout);
+            updateSettingsExtraGroups();
             settingsExtraMenu.classList.remove('hidden');
             settingsExtraMenu.classList.add('show');
         }
@@ -6772,6 +6793,30 @@ function setMySettingsExtraBtns() {
             }
         });
     }
+}
+
+function updateSettingsExtraGroups() {
+    settingsExtraMenu.querySelectorAll('.extra-menu-group').forEach((header) => {
+        const ids = (header.dataset.buttons || '').split(',');
+        const anyVisible = ids.some((id) => {
+            const btn = document.getElementById(id.trim());
+            return btn && !btn.classList.contains('hidden') && btn.style.display !== 'none';
+        });
+        header.style.display = anyVisible ? '' : 'none';
+    });
+    settingsExtraMenu.querySelectorAll('.extra-menu-divider').forEach((div) => {
+        let prev = div.previousElementSibling;
+        while (prev && !prev.classList.contains('extra-menu-group')) {
+            prev = prev.previousElementSibling;
+        }
+        let next = div.nextElementSibling;
+        while (next && !next.classList.contains('extra-menu-group')) {
+            next = next.nextElementSibling;
+        }
+        const prevVisible = prev && prev.style.display !== 'none';
+        const nextVisible = next && next.style.display !== 'none';
+        div.style.display = prevVisible && nextVisible ? '' : 'none';
+    });
 }
 
 /**
@@ -7556,6 +7601,48 @@ function attachMediaStream(element, stream) {
 }
 
 /**
+ * Create a loading spinner overlay inside a video wrap element.
+ * The spinner is automatically hidden once the video starts playing.
+ * @param {HTMLElement} wrap - The parent wrapper div (.Camera or .Screen)
+ * @param {HTMLVideoElement} videoEl - The video element to monitor
+ */
+function createVideoLoadingSpinner(wrap, videoEl) {
+    const spinnerWrap = document.createElement('div');
+    spinnerWrap.className = 'video-loading-spinner';
+
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.className = 'loading-spinner';
+
+    const spinnerRing = document.createElement('div');
+    spinnerRing.className = 'spinner-ring';
+
+    const spinnerLogo = document.createElement('img');
+    spinnerLogo.className = 'spinner-logo';
+    spinnerLogo.src = '../images/logo.svg';
+    spinnerLogo.alt = 'logo';
+
+    loadingSpinner.appendChild(spinnerRing);
+    loadingSpinner.appendChild(spinnerLogo);
+    spinnerWrap.appendChild(loadingSpinner);
+    wrap.appendChild(spinnerWrap);
+
+    function hideSpinner() {
+        if (spinnerWrap.style.display === 'none') return;
+        spinnerWrap.style.display = 'none';
+        videoEl.removeEventListener('playing', hideSpinner);
+        videoEl.removeEventListener('loadeddata', hideSpinner);
+    }
+
+    videoEl.addEventListener('playing', hideSpinner);
+    videoEl.addEventListener('loadeddata', hideSpinner);
+
+    // If the video is already playing or has data, hide immediately
+    if (videoEl.readyState >= 2) {
+        hideSpinner();
+    }
+}
+
+/**
  * Show left buttons & status
  * if buttons visible or I'm on hover do nothing return
  * if mobile and chatroom open do nothing return
@@ -7904,6 +7991,11 @@ async function swapCamera() {
     camera = camera == 'user' ? 'environment' : 'user';
     camVideo = camera == 'user' ? true : { facingMode: { exact: camera } };
 
+    // Show loading spinner while switching camera
+    const myVideoWrap = getId('myVideoWrap');
+    const spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
+    if (spinner) spinner.style.display = '';
+
     // some devices can't swap the cam, if have Video Track already in execution.
     await stopLocalVideoTrack();
 
@@ -7921,6 +8013,9 @@ async function swapCamera() {
         console.log('[Error] to swapping camera', err);
         userLog('error', 'Error to swapping the camera ' + err);
         // https://blog.addpipe.com/common-getusermedia-errors/
+    } finally {
+        // Hide loading spinner
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -8045,6 +8140,8 @@ async function startScreenSharing(constraints, init) {
             elemDisplay(initVideo, true, 'block');
             initVideo.classList.toggle('mirror');
             initVideo.srcObject = newInitStream;
+            const initVideoLoader = getId('initVideoLoader');
+            if (initVideoLoader) initVideoLoader.style.display = 'none';
             disable(initVideoSelect, true);
             disable(initVideoBtn, true);
         } else {
@@ -10675,7 +10772,7 @@ function setMyHandStatus() {
     myHandStatus = !myHandStatus;
     if (myHandStatus) {
         // Raise hand
-        setColor(myHandBtn, 'green');
+        setColor(myHandBtn, '#FFD700');
         elemDisplay(myHandStatusIcon, true);
         setTippy(myHandBtn, 'Raise your hand', bottomButtonsPlacement);
         playSound('raiseHand');
@@ -13738,7 +13835,7 @@ function showAbout() {
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.60',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.69',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
         html: `
