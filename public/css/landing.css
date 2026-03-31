@@ -3802,8 +3802,9 @@ img.has-shadow {
     border-radius: 18px;
 }
 
+.br-20,
 .br-24 {
-    border-radius: 24px;
+    border-radius: 20px;
 }
 
 .w-300 {
@@ -3939,6 +3940,12 @@ img.has-shadow {
 /*--------------------------------------------------------------
 # Webkit-Scrollbar Styles
 --------------------------------------------------------------*/
+
+html,
+body {
+    scrollbar-width: thin;
+    scrollbar-color: #4678f9 #1a1b1f;
+}
 
 /* Target the scrollbar track */
 ::-webkit-scrollbar {

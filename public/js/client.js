@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.7.69
+ * @version 1.7.80
  *
  */
 
@@ -142,7 +142,7 @@ const thisInfo = getInfo();
 // Local Storage class
 const lS = new LocalStorage();
 const localStorageSettings = lS.getObjectLocalStorage('P2P_SETTINGS');
-const lsSettings = localStorageSettings ? localStorageSettings : lS.P2P_SETTINGS;
+const lsSettings = { ...lS.P2P_SETTINGS, ...(localStorageSettings || {}) };
 console.log('LOCAL_STORAGE_SETTINGS', lsSettings);
 
 // Check if embedded inside an iFrame
@@ -229,17 +229,20 @@ const msgerTheme = getId('msgerTheme');
 const msgerCPBtn = getId('msgerCPBtn');
 const msgerDropDownMenuBtn = getId('msgerDropDownMenuBtn');
 const msgerDropDownContent = getId('msgerDropDownContent');
+const msgerSidebarDropDownMenuBtn = getId('msgerSidebarDropDownMenuBtn');
+const msgerSidebarDropDownContent = getId('msgerSidebarDropDownContent');
+
 const msgerClean = getId('msgerClean');
 const msgerSaveBtn = getId('msgerSaveBtn');
-const msgerClose = getId('msgerClose');
-const msgerMaxBtn = getId('msgerMaxBtn');
-const msgerMinBtn = getId('msgerMinBtn');
+const msgerRoomChatItem = getId('msgerRoomChatItem');
+const msgerConversationTitle = getId('msgerConversationTitle');
+const msgerConversationMeta = getId('msgerConversationMeta');
 const msgerChat = getId('msgerChat');
 const msgerEmptyNotice = getId('msgerEmptyNotice');
 const msgerEmptyParticipantsNotice = getId('msgerEmptyParticipantsNotice');
+const msgerMain = document.querySelector('.msger-main');
 const msgerEmojiBtn = getId('msgerEmojiBtn');
 const msgerMarkdownBtn = getId('msgerMarkdownBtn');
-const msgerGPTBtn = getId('msgerGPTBtn');
 const msgerShareFileBtn = getId('msgerShareFileBtn');
 const msgerVideoUrlBtn = getId('msgerVideoUrlBtn');
 const msgerInput = getId('msgerInput');
@@ -305,12 +308,17 @@ const msgerEmojiPicker = getId('msgerEmojiPicker');
 
 // Chat room connected peers
 const msgerCP = getId('msgerCP');
+const msgerCPChat = getId('msgerCPChat');
 const msgerCPHeader = getId('msgerCPHeader');
 const msgerCPCloseBtn = getId('msgerCPCloseBtn');
 const msgerCPList = getId('msgerCPList');
+const msgerParticipantsList = getId('msgerParticipantsList');
 const searchPeerBarName = getId('searchPeerBarName');
 const msgerCPDropDownMenuBtn = getId('msgerCPDropDownMenuBtn');
 const msgerCPDropDownContent = getId('msgerCPDropDownContent');
+
+renderMsgerRoomActionsDropdown(msgerCPDropDownContent);
+renderMsgerRoomActionsDropdown(msgerSidebarDropDownContent, 'Desktop');
 
 // Caption section
 const captionDraggable = getId('captionDraggable');
@@ -351,8 +359,12 @@ const myPeerNameSetBtn = getId('myPeerNameSetBtn');
 const switchSounds = getId('switchSounds');
 const switchShare = getId('switchShare');
 const switchKeepButtonsVisible = getId('switchKeepButtonsVisible');
+const pinChatByDefaultRow = getId('pinChatByDefaultRow');
+const switchPinChatByDefault = getId('switchPinChatByDefault');
 const keepAwakeButton = getId('keepAwakeButton');
 const switchKeepAwake = getId('switchKeepAwake');
+const pinCaptionByDefaultRow = getId('pinCaptionByDefaultRow');
+const switchPinCaptionByDefault = getId('switchPinCaptionByDefault');
 const switchPushToTalk = getId('switchPushToTalk');
 const switchAudioPitchBar = getId('switchAudioPitchBar');
 const audioInputSelect = getId('audioSource');
@@ -433,6 +445,11 @@ const captionEveryoneStopBtn = getId('captionEveryoneStopBtn');
 const muteEveryoneBtn = getId('muteEveryoneBtn');
 const hideEveryoneBtn = getId('hideEveryoneBtn');
 const ejectEveryoneBtn = getId('ejectEveryoneBtn');
+const captionEveryoneBtnDesktop = getId('captionEveryoneBtnDesktop');
+const captionEveryoneStopBtnDesktop = getId('captionEveryoneStopBtnDesktop');
+const muteEveryoneBtnDesktop = getId('muteEveryoneBtnDesktop');
+const hideEveryoneBtnDesktop = getId('hideEveryoneBtnDesktop');
+const ejectEveryoneBtnDesktop = getId('ejectEveryoneBtnDesktop');
 const activeRoomsBtn = getId('activeRoomsBtn');
 const lockRoomBtn = getId('lockRoomBtn');
 const unlockRoomBtn = getId('unlockRoomBtn');
@@ -637,13 +654,26 @@ let isParticipantsVisible = false;
 let isCaptionBoxVisible = false;
 let isChatEmojiVisible = false;
 let isChatMarkdownOn = false;
-let isChatGPTOn = false;
 let isChatPasteTxt = false;
+let pinChatByDefault = false;
+let pinCaptionByDefault = true;
 let speechInMessages = false;
 let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let transcripts = []; // collect all the transcripts to save it later if you need
 let chatMessages = []; // collect chat messages to save it later if want
 let chatGPTcontext = []; // keep chatGPT messages context
+const CHAT_GPT_PEER_ID = 'chatgpt';
+const CHAT_GPT_NAME = 'ChatGPT';
+let activeConversation = {
+    type: 'public',
+    peerName: '',
+    peerId: '',
+};
+let unreadMessages = {
+    public: 0,
+    private: {},
+};
+let activeMsgerParticipantDropdown = null;
 
 // settings
 let videoMaxFrameRate = 30;
@@ -783,15 +813,12 @@ function setButtonsToolTip() {
     refreshMainButtonsToolTipPlacement();
     // Chat room buttons
     setTippy(msgerClose, 'Close', 'bottom');
-    setTippy(msgerShowChatOnMsgDiv, 'Show chat when you receive a new message', 'bottom');
-    setTippy(msgerSpeechMsgDiv, 'Speech the incoming messages', 'bottom');
     setTippy(msgerTogglePin, 'Toggle chat pin', 'bottom');
     setTippy(msgerTheme, 'Ghost theme', 'bottom');
     setTippy(msgerMaxBtn, 'Maximize', 'bottom');
     setTippy(msgerMinBtn, 'Minimize', 'bottom');
     setTippy(msgerEmojiBtn, 'Emoji', 'top');
     setTippy(msgerMarkdownBtn, 'Markdown', 'top');
-    setTippy(msgerGPTBtn, 'ChatGPT', 'top');
     setTippy(msgerShareFileBtn, 'Share file', 'top');
     setTippy(msgerCPBtn, 'Participants', 'top');
     setTippy(msgerCleanTextBtn, 'Clean', 'top');
@@ -828,6 +855,8 @@ function setButtonsToolTip() {
     setTippy(switchSounds, 'Toggle room notify sounds', 'right');
     setTippy(switchShare, "Show 'Share Room' popup on join.", 'right');
     setTippy(switchKeepButtonsVisible, 'Keep buttons always visible', 'right');
+    setTippy(switchPinChatByDefault, 'Open chat pinned by default', 'right');
+    setTippy(switchPinCaptionByDefault, 'Open transcription pinned by default', 'right');
     setTippy(switchKeepAwake, 'Prevent the device from sleeping (if supported)', 'right');
     setTippy(recImage, 'Toggle recording', 'right');
     setTippy(networkIP, 'IP address associated with the ICE candidate', 'right');
@@ -1592,7 +1621,6 @@ function handleButtonsRule() {
         { element: msgerMaxBtn, display: !isMobileDevice && buttons.chat.showMaxBtn },
         { element: msgerSaveBtn, display: buttons.chat.showSaveMessageBtn },
         { element: msgerMarkdownBtn, display: buttons.chat.showMarkDownBtn },
-        { element: msgerGPTBtn, display: buttons.chat.showChatGPTBtn },
         { element: msgerShareFileBtn, display: buttons.chat.showFileShareBtn },
         { element: msgerVideoUrlBtn, display: buttons.chat.showShareVideoAudioBtn },
         { element: msgerCPBtn, display: buttons.chat.showParticipantsBtn },
@@ -2139,8 +2167,8 @@ async function changeInitCamera(deviceId) {
 async function changeLocalCamera(deviceId) {
     // Show loading spinner while switching camera
     const myVideoWrap = getId('myVideoWrap');
-    let spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
-    if (spinner) spinner.style.display = '';
+    const spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
+    if (spinner) elemDisplay(spinner, true, 'flex');
 
     if (localVideoMediaStream) {
         await stopVideoTracks(localVideoMediaStream);
@@ -2171,8 +2199,7 @@ async function changeLocalCamera(deviceId) {
             } catch (fallbackErr) {
                 console.error('Error accessing init video device with default constraints', fallbackErr);
                 printError(err);
-                // Hide loading spinner on error
-                if (spinner) spinner.style.display = 'none';
+                if (spinner) elemDisplay(spinner, false);
             }
         });
 
@@ -2190,8 +2217,7 @@ async function changeLocalCamera(deviceId) {
             await refreshMyStreamToPeers(camStream);
             setLocalMaxFps(videoMaxFrameRate);
         }
-        // Hide loading spinner
-        if (spinner) spinner.style.display = 'none';
+        if (spinner) elemDisplay(spinner, false);
     }
 
     /**
@@ -3937,6 +3963,8 @@ async function loadLocalMedia(stream, kind) {
 
             if (!useVideo) {
                 elemDisplay(myVideoAvatarImage, true, 'block');
+                const spinner = myVideoWrap.querySelector('.video-loading-spinner');
+                if (spinner) elemDisplay(spinner, false);
                 setMediaButtonsClass([
                     { element: myVideoStatusIcon, status: false, mediaType: 'video' },
                     { element: videoBtn, status: false, mediaType: 'video' },
@@ -4297,7 +4325,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
                 setTippy(remoteAudioStatusIcon, 'Participant audio is on', 'bottom');
                 setTippy(remoteAudioVolume, '🔊 Volume', 'top');
                 setTippy(remoteVideoAudioUrlBtn, 'Send Video or Audio', 'bottom');
-                setTippy(remotePrivateMsgBtn, 'Send private message', 'bottom');
+                setTippy(remotePrivateMsgBtn, 'Open private conversation', 'bottom');
                 setTippy(remoteGeoLocationBtn, 'Get Geo Location', 'bottom');
                 setTippy(remoteFileShareBtn, 'Send file', 'bottom');
                 setTippy(remoteVideoToImgBtn, 'Take a snapshot', 'bottom');
@@ -4494,6 +4522,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
                     { element: remoteVideoAvatarImage, display: true, mode: 'block' },
                 ]);
                 setMediaButtonsClass([{ element: remoteVideoStatusIcon, status: false, mediaType: 'video' }]);
+                const spinner = remoteVideoWrap.querySelector('.video-loading-spinner');
+                if (spinner) elemDisplay(spinner, false);
             }
             break;
         case 'screen':
@@ -4555,7 +4585,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             if (!isMobileDevice) {
                 setTippy(remoteScreenPeerName, 'Participant screen', 'bottom');
                 setTippy(remoteScreenVideoAudioUrlBtn, 'Send Video or Audio', 'bottom');
-                setTippy(remoteScreenPrivateMsgBtn, 'Send private message', 'bottom');
+                setTippy(remoteScreenPrivateMsgBtn, 'Open private conversation', 'bottom');
                 setTippy(remoteScreenFileShareBtn, 'Send file', 'bottom');
                 setTippy(remoteScreenToImgBtn, 'Take a snapshot', 'bottom');
                 setTippy(remoteScreenFullScreenBtn, 'Full screen mode', 'bottom');
@@ -5806,11 +5836,44 @@ function setFullScreenBtn() {
 function setChatRoomBtn() {
     // adapt chat room size for mobile
     setChatRoomAndCaptionForMobile();
+    setActiveConversation('public');
+    ensureChatGPTConversationEntry();
+
+    msgerRoomChatItem?.addEventListener('click', () => {
+        setActiveConversation('public');
+        msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+        msgerCPBtn.classList.remove('active');
+        msgerInput.focus();
+        msgerChat.scrollTop = msgerChat.scrollHeight;
+    });
+
+    msgerSidebarCloseBtn?.addEventListener('click', () => {
+        msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+        msgerCPBtn.classList.remove('active');
+        closeAllMsgerParticipantDropdownMenus();
+    });
+
+    window.addEventListener('resize', () => {
+        closeAllMsgerParticipantDropdownMenus();
+        if (isChatRoomVisible) {
+            if (isMobileDevice) {
+                if (isChatPinned) {
+                    chatUnpin();
+                }
+                setSP('--msger-width', '99%');
+                setSP('--msger-height', '99%');
+                elemDisplay(msgerTogglePin, false);
+            }
+            syncParticipantsPanelVisibility();
+        }
+    });
 
     // Search peer by name
     searchPeerBarName.addEventListener('keyup', () => {
         searchPeer();
     });
+    document.addEventListener('click', handleMsgerParticipantDropdownDocumentClick);
+    msgerCPList?.addEventListener('scroll', closeAllMsgerParticipantDropdownMenus);
 
     // open hide chat room
     chatRoomBtn.addEventListener('click', (e) => {
@@ -5843,19 +5906,37 @@ function setChatRoomBtn() {
         toggleChatDropDownMenu();
     });
 
-    // dropdown msgerCP menu
-    msgerCPDropDownMenuBtn.addEventListener('click', () => {
-        toggleMsgerCPDropDownMenu();
+    // dropdown participants menus
+    msgerCPDropDownMenuBtn?.addEventListener('click', () => {
+        toggleParticipantsDropDownMenu(msgerCPDropDownContent, msgerSidebarDropDownContent);
+    });
+
+    msgerSidebarDropDownMenuBtn?.addEventListener('click', () => {
+        toggleParticipantsDropDownMenu(msgerSidebarDropDownContent, msgerCPDropDownContent);
     });
 
     // show msger participants section
-    msgerCPBtn.addEventListener('click', (e) => {
-        elemDisplay(msgerCP, true, 'flex');
+    msgerCPBtn.addEventListener('click', () => {
+        if (isChatPinned) {
+            const isOpen = msgerDraggable.classList.toggle('msger-pinned-sidebar-open');
+            msgerCPBtn.classList.toggle('active', isOpen);
+            if (isOpen) {
+                searchPeerBarName?.focus();
+            } else {
+                closeAllMsgerParticipantDropdownMenus();
+            }
+            return;
+        }
+        if (shouldDockParticipantsPanel()) {
+            syncParticipantsPanelVisibility(true);
+            return;
+        }
+        syncParticipantsPanelVisibility(!isParticipantsVisible);
     });
 
     // hide msger participants section
-    msgerCPCloseBtn.addEventListener('click', (e) => {
-        elemDisplay(msgerCP, false);
+    msgerCPCloseBtn.addEventListener('click', () => {
+        syncParticipantsPanelVisibility(false);
     });
 
     // clean chat messages
@@ -5896,21 +5977,19 @@ function setChatRoomBtn() {
         setColor(msgerMarkdownBtn, isChatMarkdownOn ? 'lime' : 'white');
     });
 
-    // ChatGPT/OpenAI
-    msgerGPTBtn.addEventListener('click', (e) => {
-        isChatGPTOn = !isChatGPTOn;
-        setColor(msgerGPTBtn, isChatGPTOn ? 'lime' : 'white');
-    });
-
     // share file from chat
     msgerShareFileBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        selectFileToShare(myPeerId, true);
+        const shareTarget = getConversationShareTarget('a file');
+        if (!shareTarget) return;
+        selectFileToShare(shareTarget.peerId, shareTarget.broadcast, shareTarget.peerName);
     });
 
     // open Video Url Player
     msgerVideoUrlBtn.addEventListener('click', (e) => {
-        sendVideoUrl();
+        const shareTarget = getConversationShareTarget('video or audio');
+        if (!shareTarget) return;
+        sendVideoUrl(shareTarget.videoPeerId, shareTarget.peerName, shareTarget.broadcast);
     });
 
     // Execute a function when the user releases a key on the keyboard
@@ -5990,20 +6069,42 @@ function setChatRoomBtn() {
 function setParticipantsBtn() {
     participantsBtn.addEventListener('click', async (e) => {
         e.preventDefault();
-        if (isParticipantsVisible) {
-            hideChatRoomAndEmojiPicker();
-            elemDisplay(msgerCP, false);
-        }
-        if (!isChatRoomVisible && !isParticipantsVisible) {
+        if (!isChatRoomVisible) {
             showChatRoomDraggable();
-            await sleep(500);
-            elemDisplay(msgerCP, true, 'flex');
         }
-        isParticipantsVisible = !isParticipantsVisible;
-        screenReaderAccessibility.announceMessage(
-            isParticipantsVisible ? 'Participants panel opened' : 'Participants panel closed'
-        );
+
+        if (!isMobileDevice && canBePinned()) {
+            if (isCaptionPinned) {
+                userLog('toast', 'Please unpin the Caption that appears to be currently pinned');
+                return;
+            }
+
+            if (!isChatPinned) {
+                chatPin();
+            }
+
+            openPinnedParticipantsSidebar(true);
+            return;
+        }
+
+        syncParticipantsPanelVisibility(true);
+        searchPeerBarName?.focus();
+        screenReaderAccessibility.announceMessage('Participants list opened');
     });
+}
+
+function openPinnedParticipantsSidebar(announce = false) {
+    if (!isChatPinned) {
+        return;
+    }
+
+    msgerDraggable.classList.add('msger-pinned-sidebar-open');
+    msgerCPBtn.classList.add('active');
+    searchPeerBarName?.focus();
+
+    if (announce) {
+        screenReaderAccessibility.announceMessage('Pinned chat participants opened');
+    }
 }
 
 /**
@@ -6399,7 +6500,9 @@ function setMyFileShareBtn() {
 
     fileShareBtn.addEventListener('click', (e) => {
         //window.open("https://fromsmash.com"); // for Big Data
-        selectFileToShare(myPeerId, true);
+        const shareTarget = getConversationShareTarget('a file');
+        if (!shareTarget) return;
+        selectFileToShare(shareTarget.peerId, shareTarget.broadcast, shareTarget.peerName);
     });
     sendAbortBtn.addEventListener('click', (e) => {
         abortFileTransfer();
@@ -6686,6 +6789,27 @@ function setMySettingsBtn() {
         playSound('switch');
     });
 
+    if (!isDesktopDevice) {
+        elemDisplay(pinChatByDefaultRow, false);
+        elemDisplay(pinCaptionByDefaultRow, false);
+    } else {
+        switchPinChatByDefault.addEventListener('change', (e) => {
+            pinChatByDefault = e.currentTarget.checked;
+            lsSettings.pin_chat_by_default = pinChatByDefault;
+            lS.setSettings(lsSettings);
+            userLog('toast', `Chat opens pinned by default ${pinChatByDefault ? 'ON' : 'OFF'}`);
+            playSound('switch');
+        });
+
+        switchPinCaptionByDefault.addEventListener('change', (e) => {
+            pinCaptionByDefault = e.currentTarget.checked;
+            lsSettings.pin_caption_by_default = pinCaptionByDefault;
+            lS.setSettings(lsSettings);
+            userLog('toast', `Transcription opens pinned by default ${pinCaptionByDefault ? 'ON' : 'OFF'}`);
+            playSound('switch');
+        });
+    }
+
     // WakeLock for mobile/tablet
     if (!isDesktopDevice && isWakeLockSupported()) {
         switchKeepAwake.addEventListener('change', (e) => {
@@ -6904,7 +7028,9 @@ function setupMySettings() {
     });
     // tab media
     shareMediaAudioVideoBtn.addEventListener('click', (e) => {
-        sendVideoUrl();
+        const shareTarget = getConversationShareTarget('video or audio');
+        if (!shareTarget) return;
+        sendVideoUrl(shareTarget.videoPeerId, shareTarget.peerName, shareTarget.broadcast);
     });
     // select audio input
     audioInputSelect.addEventListener('change', async () => {
@@ -7026,8 +7152,7 @@ function setupMySettings() {
                 recognitionDialectIndex: recognitionDialect.selectedIndex,
             },
         });
-        elemDisplay(captionEveryoneBtn, false);
-        elemDisplay(captionEveryoneStopBtn, true, 'inline');
+        syncCaptionEveryoneButtons(true);
     });
     captionEveryoneStopBtn.addEventListener('click', (e) => {
         sendToServer('caption', {
@@ -7035,8 +7160,7 @@ function setupMySettings() {
             peer_name: myPeerName,
             action: 'stop',
         });
-        elemDisplay(captionEveryoneBtn, true, 'inline');
-        elemDisplay(captionEveryoneStopBtn, false);
+        syncCaptionEveryoneButtons(false);
     });
     muteEveryoneBtn.addEventListener('click', (e) => {
         disableAllPeers('audio');
@@ -7047,6 +7171,12 @@ function setupMySettings() {
     ejectEveryoneBtn.addEventListener('click', (e) => {
         ejectEveryone();
     });
+    captionEveryoneBtnDesktop?.addEventListener('click', () => captionEveryoneBtn.click());
+    captionEveryoneStopBtnDesktop?.addEventListener('click', () => captionEveryoneStopBtn.click());
+    muteEveryoneBtnDesktop?.addEventListener('click', () => muteEveryoneBtn.click());
+    hideEveryoneBtnDesktop?.addEventListener('click', () => hideEveryoneBtn.click());
+    ejectEveryoneBtnDesktop?.addEventListener('click', () => ejectEveryoneBtn.click());
+    syncCaptionEveryoneButtons(false);
     lockRoomBtn.addEventListener('click', (e) => {
         handleRoomAction({ action: 'lock' }, true);
     });
@@ -7207,6 +7337,8 @@ function setKeyboardShortcuts(enabled) {
 function loadSettingsFromLocalStorage() {
     showChatOnMessage = lsSettings.show_chat_on_msg;
     speechInMessages = lsSettings.speech_in_msg;
+    pinChatByDefault = lsSettings.pin_chat_by_default;
+    pinCaptionByDefault = lsSettings.pin_caption_by_default;
     msgerShowChatOnMsg.checked = showChatOnMessage;
     msgerSpeechMsg.checked = speechInMessages;
     screenFpsSelect.selectedIndex = lsSettings.screen_fps;
@@ -7222,6 +7354,8 @@ function loadSettingsFromLocalStorage() {
     switchSounds.checked = notifyBySound;
     switchShare.checked = notify;
     switchKeepButtonsVisible.checked = isKeepButtonsVisible;
+    switchPinChatByDefault.checked = pinChatByDefault;
+    switchPinCaptionByDefault.checked = pinCaptionByDefault;
     switchAudioPitchBar.checked = isAudioPitchBar;
     switchShortcuts.checked = isShortcutsEnabled;
     keepCustomTheme.checked = themeCustom.keep;
@@ -7626,18 +7760,34 @@ function createVideoLoadingSpinner(wrap, videoEl) {
     spinnerWrap.appendChild(loadingSpinner);
     wrap.appendChild(spinnerWrap);
 
+    let fallbackTimer = null;
+
     function hideSpinner() {
         if (spinnerWrap.style.display === 'none') return;
         spinnerWrap.style.display = 'none';
         videoEl.removeEventListener('playing', hideSpinner);
         videoEl.removeEventListener('loadeddata', hideSpinner);
+        videoEl.removeEventListener('loadedmetadata', hideSpinner);
+        videoEl.removeEventListener('canplay', hideSpinner);
+        if (fallbackTimer) {
+            clearInterval(fallbackTimer);
+            fallbackTimer = null;
+        }
     }
 
     videoEl.addEventListener('playing', hideSpinner);
     videoEl.addEventListener('loadeddata', hideSpinner);
+    videoEl.addEventListener('loadedmetadata', hideSpinner);
+    videoEl.addEventListener('canplay', hideSpinner);
+
+    fallbackTimer = window.setInterval(() => {
+        if (videoEl.readyState >= HTMLMediaElement.HAVE_METADATA || videoEl.videoWidth > 0 || videoEl.currentTime > 0) {
+            hideSpinner();
+        }
+    }, 250);
 
     // If the video is already playing or has data, hide immediately
-    if (videoEl.readyState >= 2) {
+    if (videoEl.readyState >= HTMLMediaElement.HAVE_METADATA || videoEl.videoWidth > 0) {
         hideSpinner();
     }
 }
@@ -7994,7 +8144,7 @@ async function swapCamera() {
     // Show loading spinner while switching camera
     const myVideoWrap = getId('myVideoWrap');
     const spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
-    if (spinner) spinner.style.display = '';
+    if (spinner) elemDisplay(spinner, true, 'flex');
 
     // some devices can't swap the cam, if have Video Track already in execution.
     await stopLocalVideoTrack();
@@ -8014,8 +8164,7 @@ async function swapCamera() {
         userLog('error', 'Error to swapping the camera ' + err);
         // https://blog.addpipe.com/common-getusermedia-errors/
     } finally {
-        // Hide loading spinner
-        if (spinner) spinner.style.display = 'none';
+        if (spinner) elemDisplay(spinner, false);
     }
 }
 
@@ -9164,12 +9313,15 @@ function setChatRoomAndCaptionForMobile() {
  */
 function showChatRoomDraggable() {
     playSound('newMessage');
-    // Hide Participants chat
-    elemDisplay(msgerCP, false);
 
     if (isMobileDevice) {
         elemDisplay(bottomButtons, false);
         isButtonsVisible = false;
+        if (isChatPinned) {
+            chatUnpin();
+        }
+        setSP('--msger-width', '99%');
+        setSP('--msger-height', '99%');
     }
     //chatLeftCenter();
     chatCenter();
@@ -9177,12 +9329,79 @@ function showChatRoomDraggable() {
     chatRoomBtn.className = className.chatOff;
     isChatRoomVisible = true;
 
-    if (isDesktopDevice && canBePinned()) {
-        toggleChatPin();
+    if (!isMobileDevice && canBePinned() && pinChatByDefault && !isChatPinned && !isCaptionPinned) {
+        chatPin();
     }
+
+    syncParticipantsPanelVisibility();
 
     setTippy(chatRoomBtn, 'Close the chat', bottomButtonsPlacement);
     screenReaderAccessibility.announceMessage('Chat opened');
+}
+
+function shouldDockParticipantsPanel() {
+    return !isMobileDevice && window.innerWidth > 1200;
+}
+
+function syncParticipantsListContainer(showParticipantsPanel = false) {
+    if (!msgerCPList || !msgerCPChat || !msgerPrivateChatsEmpty?.parentElement) {
+        return;
+    }
+
+    const sidebarContainer = msgerPrivateChatsEmpty.parentElement;
+    const useMobilePanel = isChatRoomVisible && (isMobileDevice || window.innerWidth <= 820) && showParticipantsPanel;
+
+    if (useMobilePanel) {
+        if (msgerCPList.parentElement !== msgerCPChat) {
+            msgerCPChat.appendChild(msgerCPList);
+        }
+        return;
+    }
+
+    if (msgerCPList.parentElement !== sidebarContainer) {
+        msgerPrivateChatsEmpty.insertAdjacentElement('afterend', msgerCPList);
+    }
+}
+
+function syncParticipantsPanelVisibility(forceVisible = null) {
+    if (!msgerCP || !msgerMain) {
+        return;
+    }
+
+    const canShowParticipantsPanel = isChatRoomVisible && (isMobileDevice || window.innerWidth <= 820);
+    const shouldShow = forceVisible === null ? isParticipantsVisible : forceVisible;
+
+    if (!canShowParticipantsPanel) {
+        syncParticipantsListContainer(false);
+        elemDisplay(msgerMain, true, 'flex');
+        elemDisplay(msgerCP, false);
+        msgerCP.setAttribute('aria-hidden', 'true');
+        msgerDraggable.classList.remove('msger-mobile-participants-open');
+        msgerCPBtn.classList.remove('active');
+        closeAllMsgerParticipantDropdownMenus();
+        isParticipantsVisible = false;
+        return;
+    }
+
+    syncParticipantsListContainer(shouldShow);
+    elemDisplay(msgerMain, !shouldShow, 'flex');
+    elemDisplay(msgerCP, shouldShow, 'flex');
+    msgerCP.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    msgerDraggable.classList.toggle('msger-mobile-participants-open', shouldShow);
+    msgerCPBtn.classList.toggle('active', shouldShow);
+
+    if (shouldShow) {
+        if (isMobileDevice || window.innerWidth <= 820) {
+            msgerCPCloseBtn?.focus();
+        } else {
+            searchPeerBarName?.focus();
+        }
+    } else {
+        closeAllMsgerParticipantDropdownMenus();
+    }
+
+    isParticipantsVisible = shouldShow;
+    toggleMsgerParticipantsEmptyNotice();
 }
 
 /**
@@ -9202,8 +9421,8 @@ function showCaptionDraggable() {
 
     isCaptionBoxVisible = true;
 
-    if (isDesktopDevice && canBePinned()) {
-        toggleCaptionPin();
+    if (isDesktopDevice && canBePinned() && pinCaptionByDefault && !isChatPinned && !isCaptionPinned) {
+        captionPin();
     }
 
     screenReaderAccessibility.announceMessage('Caption opened');
@@ -9218,10 +9437,23 @@ function toggleChatDropDownMenu() {
         : (msgerDropDownContent.style.display = 'block');
 }
 
-function toggleMsgerCPDropDownMenu() {
-    msgerCPDropDownContent.style.display === 'block'
-        ? (msgerCPDropDownContent.style.display = 'none')
-        : (msgerCPDropDownContent.style.display = 'block');
+function toggleParticipantsDropDownMenu(activeMenu, siblingMenu = null) {
+    if (!activeMenu) {
+        return;
+    }
+
+    if (siblingMenu) {
+        siblingMenu.style.display = 'none';
+    }
+
+    activeMenu.style.display === 'block' ? (activeMenu.style.display = 'none') : (activeMenu.style.display = 'block');
+}
+
+function syncCaptionEveryoneButtons(isActive) {
+    elemDisplay(captionEveryoneBtn, !isActive, 'inline');
+    elemDisplay(captionEveryoneStopBtn, isActive, 'inline');
+    elemDisplay(captionEveryoneBtnDesktop, !isActive, 'inline');
+    elemDisplay(captionEveryoneStopBtnDesktop, isActive, 'inline');
 }
 
 /**
@@ -9247,13 +9479,22 @@ function chatMinimize() {
             setSP('--msger-width', '99%');
             setSP('--msger-height', '99%');
         } else {
-            setSP('--msger-width', '420px');
-            setSP('--msger-height', '680px');
+            setSP('--msger-width', 'min(1120px, 92vw)');
+            setSP('--msger-height', 'min(760px, 92vh)');
         }
     } else {
         setSP('--msger-width', '25%');
         setSP('--msger-height', '100%');
     }
+}
+
+function setChatPinnedLayout(isPinned) {
+    msgerDraggable.classList.toggle('msger-pinned', isPinned);
+    if (!isPinned) {
+        msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+    }
+    msgerCPBtn.classList.toggle('active', false);
+    msgerTogglePin.classList.toggle('active', isPinned);
 }
 
 /**
@@ -9299,12 +9540,11 @@ function chatPin() {
     videoMediaContainerPin();
     chatPinned();
     isChatPinned = true;
+    setChatPinnedLayout(true);
     setColor(msgerTogglePin, 'lime');
     resizeVideoMedia();
-    msgerDraggable.style.resize = 'none';
     if (!isMobileDevice) {
         undragElement(msgerDraggable, msgerHeader);
-        undragElement(msgerDraggable, msgerCPHeader);
     }
 }
 
@@ -9313,19 +9553,18 @@ function chatPin() {
  */
 function chatUnpin() {
     videoMediaContainerUnpin();
-    setSP('--msger-width', '420px');
-    setSP('--msger-height', '680px');
+    setSP('--msger-width', 'min(1120px, 92vw)');
+    setSP('--msger-height', 'min(760px, 92vh)');
     elemDisplay(msgerMinBtn, false);
     buttons.chat.showMaxBtn && elemDisplay(msgerMaxBtn, true);
     isChatPinned = false;
+    setChatPinnedLayout(false);
     //chatLeftCenter();
     chatCenter();
     setColor(msgerTogglePin, 'white');
     resizeVideoMedia();
-    msgerDraggable.style.resize = 'both';
     if (!isMobileDevice) {
         dragElement(msgerDraggable, msgerHeader);
-        dragElement(msgerDraggable, msgerCPHeader);
     }
 }
 
@@ -9418,9 +9657,9 @@ function captionPin() {
     videoMediaContainerPin();
     captionPinned();
     isCaptionPinned = true;
+    captionDraggable.classList.add('caption-pinned');
     setColor(captionTogglePin, 'lime');
     resizeVideoMedia();
-    captionDraggable.style.resize = 'none';
     if (!isMobileDevice) undragElement(captionDraggable, captionHeader);
 }
 
@@ -9434,11 +9673,11 @@ function captionUnpin() {
     elemDisplay(captionMinBtn, false);
     buttons.caption.showMaxBtn && elemDisplay(captionMaxBtn, true);
     isCaptionPinned = false;
+    captionDraggable.classList.remove('caption-pinned');
     //captionRightCenter();
     captionCenter();
     setColor(captionTogglePin, 'white');
     resizeVideoMedia();
-    captionDraggable.style.resize = 'both';
     if (!isMobileDevice) dragElement(captionDraggable, captionHeader);
 }
 
@@ -9537,10 +9776,12 @@ function hideChatRoomAndEmojiPicker() {
         chatUnpin();
     }
     elemDisplay(msgerDraggable, false);
+    elemDisplay(msgerCP, false);
     elemDisplay(msgerEmojiPicker, false);
     setColor(msgerEmojiBtn, '#FFFFFF');
     chatRoomBtn.className = className.chatOn;
     isChatRoomVisible = false;
+    isParticipantsVisible = false;
     isChatEmojiVisible = false;
     setTippy(chatRoomBtn, 'Open the chat', bottomButtonsPlacement);
     screenReaderAccessibility.announceMessage('Chat closed');
@@ -9565,7 +9806,7 @@ function hideCaptionBox() {
  * Send Chat messages to peers in the room
  */
 async function sendChatMessage() {
-    if (!thereArePeerConnections() && !isChatGPTOn) {
+    if (!thereArePeerConnections() && !isChatGPTConversationActive()) {
         cleanMessageInput();
         isChatPasteTxt = false;
         return userLog('info', "Can't send message, no participants in the room");
@@ -9580,8 +9821,16 @@ async function sendChatMessage() {
         return cleanMessageInput();
     }
 
-    isChatGPTOn ? await getChatGPTmessage(msg) : emitMsg(myPeerName, myPeerAvatar, 'toAll', msg, false, myPeerId);
-    appendMessage(myPeerName, rightChatAvatar, 'right', msg, false);
+    if (activeConversation.type === 'private' && activeConversation.peerId === CHAT_GPT_PEER_ID) {
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, null, CHAT_GPT_NAME);
+        await getChatGPTmessage(msg);
+    } else if (activeConversation.type === 'private' && activeConversation.peerName) {
+        emitMsg(myPeerName, myPeerAvatar, activeConversation.peerName, msg, true, myPeerId);
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, null, activeConversation.peerName);
+    } else {
+        emitMsg(myPeerName, myPeerAvatar, 'toAll', msg, false, myPeerId);
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, false);
+    }
     cleanMessageInput();
 }
 
@@ -9623,6 +9872,18 @@ function handleDataChannelChat(dataMessage) {
         userLog('toast', `New message from: ${msgFrom}`);
     }
 
+    if (msgPrivate) {
+        if (!isConversationCurrentlyVisible('private', msgFrom, msgFromId)) {
+            addUnreadMessage('private', msgFromId);
+
+            if (isChatRoomVisible && isChatPinned) {
+                openPinnedParticipantsSidebar();
+            }
+        }
+    } else if (!isConversationCurrentlyVisible('public')) {
+        addUnreadMessage('public');
+    }
+
     setPeerChatAvatarImgName('left', msgFrom, msgFromAvatar);
     appendMessage(msgFrom, leftChatAvatar, 'left', msg, msgPrivate, msgId, msgFrom);
     speechInMessages ? speechMessage(true, msgFrom, msg) : playSound('chatMessage');
@@ -9638,7 +9899,7 @@ function handleDataChannelChat(dataMessage) {
  */
 function cleanMessageInput() {
     msgerInput.value = '';
-    msgerInput.style.height = '15px';
+    checkLineBreaks();
 }
 
 /**
@@ -9746,28 +10007,28 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     const getFrom = filterXSS(from);
     const getTo = filterXSS(to);
     const getSide = filterXSS(side);
-    const getImg = isChatGPTOn && getSide === 'left' ? images.chatgpt : filterXSS(img);
+    const getImg = getFrom === CHAT_GPT_NAME && getSide === 'left' ? images.chatgpt : filterXSS(img);
     const getMsg = filterXSS(msg);
     const getPrivateMsg = filterXSS(privateMsg);
-    const getMsgId = filterXSS(msgId);
-
-    const isChatGPT = getFrom === 'ChatGPT';
 
     // collect chat messages to save it later
+    const conversationPeer = getPrivateMsg ? (getSide === 'left' ? getFrom : getTo) : '';
     chatMessages.push({
         time: time,
         from: getFrom,
+        to: getTo,
         msg: getMsg,
         privateMsg: getPrivateMsg,
+        conversationPeer: conversationPeer,
     });
 
     // check if i receive a private message
     let msgBubble = getPrivateMsg ? 'private-msg-bubble' : 'msg-bubble';
 
-    const isValidPrivateMessage = getPrivateMsg && getMsgId != null && getMsgId != myPeerId;
-
     let msgHTML = `
-	<div id="msg-${chatMessagesId}" class="msg ${getSide}-msg">
+	<div id="msg-${chatMessagesId}" class="msg ${getSide}-msg" data-sender="${getFrom}" data-chat-type="${
+        getPrivateMsg ? 'private' : 'public'
+    }" data-chat-peer="${conversationPeer}">
         <img class="msg-img" src="${getImg}" />
 		<div class=${msgBubble}>
             <div class="msg-info">
@@ -9778,23 +10039,6 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
             <span id="message-${chatMessagesId}"></span>
                 <hr/>
     `;
-    // add btn direct reply to private message
-    if (isValidPrivateMessage) {
-        const privateMessageTag =
-            getSide === 'left' ? `Private message from ${getFrom}` : `Private message to ${getTo}`;
-
-        msgHTML += `<p class="b-yellow">${privateMessageTag}</p>`;
-
-        if (!isChatGPT && getSide === 'left') {
-            msgHTML += `
-                <button 
-                    class="${className.msgPrivate} b-yellow"
-                    id="msg-private-reply-${chatMessagesId}"
-                    style="color:#fff; border:none; background:transparent;"
-                    onclick="sendPrivateMsgToPeer('${myPeerId}','${getFrom}')"
-                ></button>`;
-        }
-    }
     msgHTML += `
                 <button
                     id="msg-delete-${chatMessagesId}"
@@ -9838,13 +10082,12 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     }
 
     msgerChat.scrollTop += 500;
+    filterMessagesByConversation();
+    refreshMessageGrouping();
     if (!isMobileDevice) {
         setTippy(getId('msg-delete-' + chatMessagesId), 'Delete', 'top');
         setTippy(getId('msg-copy-' + chatMessagesId), 'Copy', 'top');
         setTippy(getId('msg-speech-' + chatMessagesId), 'Speech', 'top');
-        if (isValidPrivateMessage) {
-            setTippy(getId('msg-private-reply-' + chatMessagesId), 'Reply to ' + getTo, 'top');
-        }
     }
     chatMessagesId++;
     toggleMsgerEmptyNotice();
@@ -9854,18 +10097,259 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
  * Toggle empty chat notice
  */
 function toggleMsgerEmptyNotice() {
-    const messages = msgerChat.querySelectorAll('.msg');
+    const messages = Array.from(msgerChat.querySelectorAll('.msg')).filter(
+        (message) => message.style.display !== 'none'
+    );
     messages.length === 0 ? msgerEmptyNotice.classList.remove('hidden') : msgerEmptyNotice.classList.add('hidden');
+}
+
+function refreshMessageGrouping() {
+    const messages = Array.from(msgerChat.querySelectorAll('.msg')).filter(
+        (message) => message.style.display !== 'none'
+    );
+    let previousKey = '';
+
+    messages.forEach((message) => {
+        const sender = message.dataset.sender || '';
+        const chatType = message.dataset.chatType || 'public';
+        const chatPeer = message.dataset.chatPeer || '';
+        const side = message.classList.contains('right-msg') ? 'right' : 'left';
+        const currentKey = `${side}:${sender}:${chatType}:${chatPeer}`;
+        const isGrouped = currentKey === previousKey;
+
+        message.classList.toggle('msg-grouped', isGrouped);
+        previousKey = currentKey;
+    });
+}
+
+function formatUnreadCount(count) {
+    return count > 99 ? '99+' : String(count);
+}
+
+function updateUnreadBadge(element, count) {
+    if (!element) return;
+    element.textContent = formatUnreadCount(count);
+    element.classList.toggle('hidden', count <= 0);
+}
+
+function refreshUnreadBadges() {
+    updateUnreadBadge(msgerRoomChatBadge, unreadMessages.public);
+
+    msgerCPList.querySelectorAll('.msger-chat-item').forEach((item) => {
+        const peerId = item.dataset.peerId;
+        if (!peerId) return;
+        const badge = getId(peerId + '_pMsgBadge');
+        updateUnreadBadge(badge, unreadMessages.private[peerId] || 0);
+    });
+}
+
+function clearUnreadMessages(type = 'public', peerId = '') {
+    if (type === 'private' && peerId) {
+        unreadMessages.private[peerId] = 0;
+    } else {
+        unreadMessages.public = 0;
+    }
+    refreshUnreadBadges();
+}
+
+function addUnreadMessage(type = 'public', peerId = '') {
+    if (type === 'private' && peerId) {
+        unreadMessages.private[peerId] = (unreadMessages.private[peerId] || 0) + 1;
+    } else {
+        unreadMessages.public += 1;
+    }
+    refreshUnreadBadges();
+}
+
+function isConversationCurrentlyVisible(type = 'public', peerName = '', peerId = '') {
+    if (!isChatRoomVisible) return false;
+    if (type === 'private') {
+        return (
+            activeConversation.type === 'private' &&
+            ((peerId && activeConversation.peerId === peerId) ||
+                (peerName && activeConversation.peerName.toLowerCase() === peerName.toLowerCase()))
+        );
+    }
+    return activeConversation.type === 'public';
+}
+
+function getConversationMeta() {
+    if (activeConversation.type === 'private' && activeConversation.peerId === CHAT_GPT_PEER_ID) {
+        return {
+            label: 'AI assistant',
+            title: CHAT_GPT_NAME,
+            meta: `Direct messages with ${CHAT_GPT_NAME}.`,
+            placeholder: `Ask ${CHAT_GPT_NAME}...`,
+        };
+    }
+
+    if (activeConversation.type === 'private' && activeConversation.peerName) {
+        return {
+            label: 'Private chat',
+            title: activeConversation.peerName,
+            meta: `Direct messages with ${activeConversation.peerName}.`,
+            placeholder: `Message ${activeConversation.peerName}...`,
+        };
+    }
+
+    return {
+        label: 'Current view',
+        title: 'All messages',
+        meta: 'Public messages appear here.',
+        placeholder: 'Write a message...',
+    };
+}
+
+function updateConversationUi() {
+    const conversation = getConversationMeta();
+
+    if (msgerConversationLabel) msgerConversationLabel.textContent = conversation.label;
+    if (msgerConversationTitle) msgerConversationTitle.textContent = conversation.title;
+    if (msgerConversationMeta) msgerConversationMeta.textContent = conversation.meta;
+    if (msgerInput) msgerInput.placeholder = conversation.placeholder;
+
+    if (msgerRoomChatItem) {
+        msgerRoomChatItem.classList.toggle('active', activeConversation.type === 'public');
+    }
+
+    msgerCPList.querySelectorAll('.msger-chat-item').forEach((item) => {
+        const isActive =
+            activeConversation.type === 'private' &&
+            item.value &&
+            item.value.toLowerCase() === activeConversation.peerName.toLowerCase();
+        item.classList.toggle('active', isActive);
+    });
+}
+
+function filterMessagesByConversation() {
+    const conversationPeer = activeConversation.peerName.toLowerCase();
+
+    msgerChat.querySelectorAll('.msg').forEach((message) => {
+        const chatType = message.dataset.chatType || 'public';
+        const chatPeer = (message.dataset.chatPeer || '').toLowerCase();
+        const shouldShow =
+            activeConversation.type === 'private'
+                ? chatType === 'private' && chatPeer === conversationPeer
+                : chatType === 'public';
+
+        elemDisplay(message, shouldShow, 'flex');
+    });
+
+    refreshMessageGrouping();
+    toggleMsgerEmptyNotice();
+    msgerChat.scrollTop = msgerChat.scrollHeight;
+}
+
+function setActiveConversation(type = 'public', peerName = '', peerId = '') {
+    activeConversation = {
+        type,
+        peerName: filterXSS(peerName || ''),
+        peerId: peerId || '',
+    };
+
+    if (type === 'private' && peerId) {
+        clearUnreadMessages('private', peerId);
+    } else {
+        clearUnreadMessages('public');
+    }
+
+    updateConversationUi();
+    filterMessagesByConversation();
+}
+
+function isChatGPTConversationActive() {
+    return activeConversation.type === 'private' && activeConversation.peerId === CHAT_GPT_PEER_ID;
+}
+
+function resolvePeerNameById(peerId = '') {
+    if (!peerId) return '';
+    if (peerId === CHAT_GPT_PEER_ID) return CHAT_GPT_NAME;
+
+    const privateChatButton = getId(peerId + '_pMsgBtn');
+    if (privateChatButton?.value) {
+        return privateChatButton.value;
+    }
+
+    return allPeers[peerId]?.peer_name || '';
+}
+
+function getConversationShareTarget(actionLabel = 'this item') {
+    if (activeConversation.type !== 'private') {
+        return {
+            broadcast: true,
+            peerId: myPeerId,
+            videoPeerId: null,
+            peerName: '',
+        };
+    }
+
+    if (!activeConversation.peerId || activeConversation.peerId === CHAT_GPT_PEER_ID) {
+        userLog('info', `Switch to a participant chat to share ${actionLabel}`);
+        return null;
+    }
+
+    return {
+        broadcast: false,
+        peerId: activeConversation.peerId,
+        videoPeerId: activeConversation.peerId,
+        peerName: activeConversation.peerName || resolvePeerNameById(activeConversation.peerId),
+    };
+}
+
+function ensureChatGPTConversationEntry() {
+    if (!msgerCPList || !buttons.chat.showChatGPTBtn || getId(CHAT_GPT_PEER_ID + '_pMsgDiv')) {
+        return;
+    }
+
+    const chatGPTEntry = `
+    <div id="${CHAT_GPT_PEER_ID}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${CHAT_GPT_NAME.toLowerCase()}">
+        <button
+            id="${CHAT_GPT_PEER_ID}_pMsgBtn"
+            class="msger-chat-item"
+            type="button"
+            value="${CHAT_GPT_NAME}"
+            data-peer-id="${CHAT_GPT_PEER_ID}"
+            title="${CHAT_GPT_NAME}"
+        >
+            <img
+                id="${CHAT_GPT_PEER_ID}_pMsgAvatar"
+                class="msger-chat-avatar"
+                src="${images.chatgpt}"
+                alt="${CHAT_GPT_NAME}"
+            />
+            <span class="msger-chat-item-copy">
+                <strong>${CHAT_GPT_NAME}</strong>
+                <small>Ask anything</small>
+            </span>
+            <span id="${CHAT_GPT_PEER_ID}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
+        </button>
+    </div>
+    `;
+
+    msgerCPList.insertAdjacentHTML('afterbegin', chatGPTEntry);
+
+    const msgerPrivateAvatar = getId(CHAT_GPT_PEER_ID + '_pMsgAvatar');
+    const msgerPrivateBtn = getId(CHAT_GPT_PEER_ID + '_pMsgBtn');
+
+    addMsgerPrivateBtn(msgerPrivateBtn, null, null, null, null, null, null, null, null, myPeerId, CHAT_GPT_PEER_ID);
+
+    toggleMsgerParticipantsEmptyNotice();
+    refreshUnreadBadges();
+    updateConversationUi();
 }
 
 /**
  * Toggle empty participants notice
  */
 function toggleMsgerParticipantsEmptyNotice() {
-    const participants = msgerCPList.querySelectorAll('.msger-peer-inputarea');
-    const isEmpty = participants.length === 0;
-    msgerEmptyParticipantsNotice.classList.toggle('hidden', !isEmpty);
-    elemDisplay(msgerCPList, !isEmpty, 'block');
+    const privateChats = msgerCPList.querySelectorAll('.msger-private-chat-entry');
+    const hasPrivateChats = privateChats.length !== 0;
+    const isMobileParticipantsView = msgerCPList.parentElement === msgerCPChat;
+
+    msgerEmptyParticipantsNotice?.classList.toggle('hidden', hasPrivateChats || !isMobileParticipantsView);
+    msgerPrivateChatsEmpty?.classList.toggle('hidden', hasPrivateChats || isMobileParticipantsView);
+    elemDisplay(msgerCPList, hasPrivateChats, 'flex');
+    elemDisplay(msgerParticipantsList, false);
 }
 
 /**
@@ -9980,6 +10464,7 @@ function deleteMessage(id) {
         // clean this message
         if (result.isConfirmed) {
             getId(id).remove();
+            refreshMessageGrouping();
             toggleMsgerEmptyNotice();
             playSound('delete');
         }
@@ -10000,6 +10485,139 @@ function copyToClipboard(id) {
         .catch((err) => {
             msgPopup('error', err, 'top', 2000);
         });
+}
+
+function closeAllMsgerParticipantDropdownMenus() {
+    document
+        .querySelectorAll('.msger-private-chat-entry .dropdown-menu-custom-list, .dropdown-menu-custom-list.floating')
+        .forEach((menu) => {
+            const placeholder = menu._msgerDropdownPlaceholder;
+            if (placeholder?.parentNode) {
+                placeholder.parentNode.insertBefore(menu, placeholder);
+                placeholder.remove();
+                menu._msgerDropdownPlaceholder = null;
+            }
+            menu.classList.remove('show', 'floating');
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.visibility = '';
+            const toggle = menu._msgerDropdownToggle || menu.parentElement?.querySelector('.dropdown-toggle');
+            toggle?.setAttribute('aria-expanded', 'false');
+        });
+    activeMsgerParticipantDropdown = null;
+}
+
+function positionMsgerParticipantDropdownMenu(toggleEl, menuEl) {
+    if (!toggleEl || !menuEl) return;
+
+    const gap = 8;
+    const viewportPadding = 12;
+
+    if (!menuEl._msgerDropdownPlaceholder && menuEl.parentNode) {
+        const placeholder = document.createElement('span');
+        placeholder.style.display = 'none';
+        menuEl.parentNode.insertBefore(placeholder, menuEl);
+        menuEl._msgerDropdownPlaceholder = placeholder;
+    }
+
+    menuEl._msgerDropdownToggle = toggleEl;
+    document.body.appendChild(menuEl);
+
+    menuEl.classList.add('show', 'floating');
+    menuEl.style.visibility = 'hidden';
+    menuEl.style.left = '0px';
+    menuEl.style.top = '0px';
+    menuEl.style.maxHeight = `${Math.max(260, window.innerHeight - viewportPadding * 2)}px`;
+
+    const toggleRect = toggleEl.getBoundingClientRect();
+    const menuWidth = Math.max(menuEl.offsetWidth, 220);
+    const menuHeight = menuEl.offsetHeight;
+
+    const maxLeft = window.innerWidth - menuWidth - viewportPadding;
+    const preferredLeft = toggleRect.right - menuWidth;
+    const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+
+    const fitsBelow = toggleRect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+    const top = fitsBelow ? toggleRect.bottom + gap : Math.max(viewportPadding, toggleRect.top - menuHeight - gap);
+
+    menuEl.style.left = `${left}px`;
+    menuEl.style.top = `${top}px`;
+    menuEl.style.visibility = '';
+}
+
+function supportsHoverPointer() {
+    return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
+function openMsgerParticipantDropdownMenu(toggleEl, menuEl) {
+    if (!toggleEl || !menuEl) return;
+
+    if (activeMsgerParticipantDropdown?.menuEl === menuEl) {
+        return;
+    }
+
+    closeAllMsgerParticipantDropdownMenus();
+    positionMsgerParticipantDropdownMenu(toggleEl, menuEl);
+    toggleEl.setAttribute('aria-expanded', 'true');
+    activeMsgerParticipantDropdown = { toggleEl, menuEl };
+}
+
+function toggleMsgerParticipantDropdownMenu(toggleEl, menuEl) {
+    if (!toggleEl || !menuEl) return;
+
+    const isOpen = menuEl.classList.contains('show');
+    closeAllMsgerParticipantDropdownMenus();
+
+    if (isOpen) return;
+
+    openMsgerParticipantDropdownMenu(toggleEl, menuEl);
+}
+
+function handleMsgerParticipantDropdownDocumentClick(event) {
+    if (!activeMsgerParticipantDropdown) return;
+
+    const { toggleEl, menuEl } = activeMsgerParticipantDropdown;
+    if (toggleEl?.contains(event.target) || menuEl?.contains(event.target)) {
+        return;
+    }
+
+    closeAllMsgerParticipantDropdownMenus();
+}
+
+function getMsgerParticipantDropdownActionMarkup(buttonId, iconClass, label, variant = 'default') {
+    const actionClass =
+        variant === 'danger'
+            ? 'dropdown-item msger-participant-action msger-participant-action-danger'
+            : 'dropdown-item msger-participant-action';
+
+    return `
+        <li>
+            <button id="${buttonId}" class="${actionClass}">
+                <span class="msger-participant-action-icon"><i class="${iconClass}"></i></span>
+                <span class="msger-participant-action-label">${label}</span>
+            </button>
+        </li>
+    `;
+}
+
+function getMsgerParticipantDropdownDividerMarkup() {
+    return `<li class="msger-dropdown-divider" aria-hidden="true"></li>`;
+}
+
+function getMsgerRoomActionsDropdownMarkup(idSuffix = '') {
+    return `
+        ${getMsgerParticipantDropdownActionMarkup(`captionEveryoneBtn${idSuffix}`, 'fas fa-play', 'Start captions')}
+        ${getMsgerParticipantDropdownActionMarkup(`captionEveryoneStopBtn${idSuffix}`, 'fas fa-stop', 'Stop captions')}
+        ${getMsgerParticipantDropdownDividerMarkup()}
+        ${getMsgerParticipantDropdownActionMarkup(`muteEveryoneBtn${idSuffix}`, 'fas fa-microphone', 'Mute everyone', 'danger')}
+        ${getMsgerParticipantDropdownActionMarkup(`hideEveryoneBtn${idSuffix}`, 'fas fa-video', 'Hide everyone', 'danger')}
+        ${getMsgerParticipantDropdownActionMarkup(`ejectEveryoneBtn${idSuffix}`, 'fas fa-right-from-bracket', 'Eject everyone', 'danger')}
+    `;
+}
+
+function renderMsgerRoomActionsDropdown(dropdownContent, idSuffix = '') {
+    if (!dropdownContent) return;
+    dropdownContent.innerHTML = getMsgerRoomActionsDropdownMarkup(idSuffix);
 }
 
 /**
@@ -10033,43 +10651,40 @@ async function msgerAddPeers(peers) {
 
                 if (peer_presenter) {
                     dropdownOptions = `
-                        <li><button id="${peer_id}_pKickOut" class="dropdown-item"><i class='fas fa-user-slash red'></i> Eject Participant</button></li>
-                        <li><button id="${peer_id}_pToggleAudio" class="dropdown-item"><i class='fas fa-microphone red'></i> Mute Microphone</button></li>
-                        <li><button id="${peer_id}_pToggleVideo" class="dropdown-item"><i class='fas fa-video red'></i> Stop Video</button></li>
-                        <li><button id="${peer_id}_pToggleScreen" class="dropdown-item"><i class='fas fa-desktop red'></i> Stop Screen</button></li>
-                        <li><button id="${peer_id}_pSelectFile" class="dropdown-item"><i class='fas fa-upload'></i> Send File</button></li>
-                        <li><button id="${peer_id}_pSendVideoUrl" class="dropdown-item"><i class='fab fa-youtube'></i> Share Video/Audio</button></li>
-                        <li><button id="${peer_id}_pRequestGeo" class="dropdown-item"><i class='fas fa-location-dot'></i> Req. Geolocation</button></li>
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pKickOut`, 'fas fa-user-slash', 'Eject participant', 'danger')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pToggleAudio`, 'fas fa-microphone', 'Mute microphone', 'danger')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pToggleVideo`, 'fas fa-video', 'Stop video', 'danger')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pToggleScreen`, 'fas fa-desktop', 'Stop screen', 'danger')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pSelectFile`, 'fas fa-upload', 'Send file')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pSendVideoUrl`, 'fab fa-youtube', 'Share video or audio')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pRequestGeo`, 'fas fa-location-dot', 'Request geolocation')}
                     `;
                 } else {
                     elemDisplay(msgerCPDropDownMenuBtn, false);
+                    elemDisplay(msgerSidebarDropDownMenuBtn, false);
                     dropdownOptions = `
-                        <li><button id="${peer_id}_pSelectFile" class="dropdown-item"><i class='fas fa-upload'></i> Send File</button></li>
-                        <li><button id="${peer_id}_pSendVideoUrl" class="dropdown-item"><i class='fab fa-youtube'></i> Share Video/Audio</button></li>
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pSelectFile`, 'fas fa-upload', 'Send file')}
+                        ${getMsgerParticipantDropdownActionMarkup(`${peer_id}_pSendVideoUrl`, 'fab fa-youtube', 'Share video or audio')}
                     `;
                 }
 
                 const msgerPrivateDiv = `
-                <div id="${peer_id}_pMsgDiv" class="msger-peer-inputarea">
-                    <span>${peer_name}</span>
-                    <img id="${peer_id}_pMsgAvatar" class="peer-img" src="${chatAvatar}">
-                    <div id="${peer_id}_pMsgInputWrap" class="msger-peer-inputwrap">
-                        <textarea
-                            rows="1"
-                            cols="1"
-                            id="${peer_id}_pMsgInput"
-                            class="msger-input"
-                            placeholder="Write message..."
-                        ></textarea>
-                        <button id="${peer_id}_pMsgBtn" class="${className.msgPrivate}" value="${peer_name}"></button>
-                        <div id="${peer_id}_pDropdownMenu" class="dropdown-menu-custom">
-                            <button id="${peer_id}_pDropdownToggle" class="dropdown-toggle">
-                                <i class="fas fa-ellipsis-vertical"></i>
-                            </button>
-                            <ul id="${peer_id}_pDropdownMenuList" class="dropdown-menu-custom-list">
-                                ${dropdownOptions}
-                            </ul>
-                        </div>
+                <div id="${peer_id}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${peer_name.toLowerCase()}">
+                    <button id="${peer_id}_pMsgBtn" class="msger-chat-item" type="button" value="${peer_name}" data-peer-id="${peer_id}" title="${peer_name}">
+                        <img id="${peer_id}_pMsgAvatar" class="msger-chat-avatar" src="${chatAvatar}" alt="${peer_name}" />
+                        <span class="msger-chat-item-copy">
+                            <strong>${peer_name}</strong>
+                            <small>Open private conversation</small>
+                        </span>
+                        <span id="${peer_id}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
+                    </button>
+                    <div id="${peer_id}_pDropdownMenu" class="dropdown-menu-custom msger-participant-dropdown">
+                        <button id="${peer_id}_pDropdownToggle" class="dropdown-toggle" type="button">
+                            <i class="fas fa-ellipsis-vertical"></i>
+                        </button>
+                        <ul id="${peer_id}_pDropdownMenuList" class="dropdown-menu-custom-list msger-participant-dropdown-menu">
+                            ${dropdownOptions}
+                        </ul>
                     </div>
                 </div>
                 `;
@@ -10078,7 +10693,6 @@ async function msgerAddPeers(peers) {
                 msgerCPList.scrollTop += 500;
 
                 const msgerPrivateAvatar = getId(peer_id + '_pMsgAvatar');
-                const msgerPrivateMsgInput = getId(peer_id + '_pMsgInput');
                 const msgerPrivateBtn = getId(peer_id + '_pMsgBtn');
                 const msgerPrivateKickOutBtn = getId(peer_id + '_pKickOut');
                 const msgerPrivateToggleAudioBtn = getId(peer_id + '_pToggleAudio');
@@ -10087,15 +10701,11 @@ async function msgerAddPeers(peers) {
                 const msgerPrivateSelectFileBtn = getId(peer_id + '_pSelectFile');
                 const msgerPrivateSendVideoUrlBtn = getId(peer_id + '_pSendVideoUrl');
                 const msgerPrivateRequestGeoBtn = getId(peer_id + '_pRequestGeo');
-
-                if (!isMobileDevice) {
-                    setTippy(msgerPrivateBtn, 'Send Private Message', 'top');
-                    setTippy(msgerPrivateAvatar, peer_name, 'top');
-                }
+                const msgerParticipantDropdownToggle = getId(peer_id + '_pDropdownToggle');
 
                 addMsgerPrivateBtn(
                     msgerPrivateBtn,
-                    msgerPrivateMsgInput,
+                    null,
                     msgerPrivateKickOutBtn,
                     msgerPrivateToggleAudioBtn,
                     msgerPrivateToggleVideoBtn,
@@ -10107,36 +10717,43 @@ async function msgerAddPeers(peers) {
                     peer_id
                 );
 
+                updateConversationUi();
+
                 // Dropdown toggle logic
                 const dropdownDiv = getId(peer_id + '_pMsgDiv').querySelector('.dropdown-menu-custom');
                 const dropdownToggle = dropdownDiv.querySelector('.dropdown-toggle');
                 const dropdownContent = dropdownDiv.querySelector('.dropdown-menu-custom-list');
                 if (dropdownToggle && dropdownContent) {
+                    let hideTimeoutId;
+
+                    const showDropdown = () => {
+                        if (!supportsHoverPointer()) return;
+                        clearTimeout(hideTimeoutId);
+                        openMsgerParticipantDropdownMenu(dropdownToggle, dropdownContent);
+                    };
+
+                    const hideDropdown = () => {
+                        if (!supportsHoverPointer()) return;
+                        hideTimeoutId = setTimeout(() => {
+                            if (activeMsgerParticipantDropdown?.menuEl === dropdownContent) {
+                                closeAllMsgerParticipantDropdownMenus();
+                            }
+                        }, 180);
+                    };
+
                     dropdownToggle.addEventListener('click', function (e) {
+                        e.preventDefault();
                         e.stopPropagation();
-                        closeAllDropdownMenu();
-                        const displayMode = dropdownContent.style.display === 'block' ? 'none' : 'block';
-                        dropdownContent.style.display = displayMode;
+                        if (supportsHoverPointer()) return;
+                        toggleMsgerParticipantDropdownMenu(dropdownToggle, dropdownContent);
                     });
-
-                    dropdownToggle.addEventListener('mouseenter', () => {
-                        closeAllDropdownMenu();
-                        dropdownContent.style.display = 'block';
-                    });
-                    dropdownContent.addEventListener('mouseleave', () => {
-                        closeAllDropdownMenu();
-                    });
-
-                    document.addEventListener('click', function () {
-                        closeAllDropdownMenu();
-                    });
-
-                    function closeAllDropdownMenu() {
-                        document.querySelectorAll('.dropdown-menu-custom-list').forEach((el) => {
-                            el.style.display = 'none';
-                        });
-                    }
+                    dropdownToggle.addEventListener('mouseenter', showDropdown);
+                    dropdownToggle.addEventListener('mouseleave', hideDropdown);
+                    dropdownContent.addEventListener('mouseenter', () => clearTimeout(hideTimeoutId));
+                    dropdownContent.addEventListener('mouseleave', hideDropdown);
                 }
+
+                refreshUnreadBadges();
             }
         }
     }
@@ -10147,15 +10764,13 @@ async function msgerAddPeers(peers) {
  * Search peer by name in chat room lists to send the private messages
  */
 function searchPeer() {
-    const searchPeerBarName = getId('searchPeerBarName').value.toLowerCase();
-    const msgerPeerInputarea = getEcN('msger-peer-inputarea');
-    for (let i = 0; i < msgerPeerInputarea.length; i++) {
-        const span = msgerPeerInputarea[i].getElementsByTagName('span')[0];
-        //console.log(span);
-        span && span.innerText.toLowerCase().includes(searchPeerBarName)
-            ? elemDisplay(msgerPeerInputarea[i], true, 'flex')
-            : elemDisplay(msgerPeerInputarea[i], false);
-    }
+    const peerSearchValue = getId('searchPeerBarName').value.toLowerCase().trim();
+    const privateEntries = msgerCPList.querySelectorAll('.msger-private-chat-entry');
+
+    privateEntries.forEach((entry) => {
+        const peerName = entry.dataset.peerName || '';
+        elemDisplay(entry, peerName.includes(peerSearchValue), 'flex');
+    });
 }
 
 /**
@@ -10164,6 +10779,7 @@ function searchPeer() {
  */
 function msgerRemovePeer(peer_id) {
     const msgerPrivateDiv = getId(peer_id + '_pMsgDiv');
+    const isActiveConversation = activeConversation.type === 'private' && activeConversation.peerId === peer_id;
     if (msgerPrivateDiv) {
         let peerToRemove = msgerPrivateDiv.firstChild;
         while (peerToRemove) {
@@ -10171,11 +10787,11 @@ function msgerRemovePeer(peer_id) {
             peerToRemove = msgerPrivateDiv.firstChild;
         }
         msgerPrivateDiv.remove();
-        // No peer connected
-        if (msgerCPList.children.length === 0 && isChatRoomVisible && isParticipantsVisible) {
-            toggleMsgerParticipantsEmptyNotice();
-        }
     }
+    delete unreadMessages.private[peer_id];
+    refreshUnreadBadges();
+    if (isActiveConversation) setActiveConversation('public');
+    toggleMsgerParticipantsEmptyNotice();
 }
 
 /**
@@ -10200,20 +10816,35 @@ function addMsgerPrivateBtn(
     // Send private message button
     msgerPrivateBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        sendPrivateMessage();
+        if (msgerPrivateMsgInput) {
+            sendPrivateMessage();
+            return;
+        }
+        const selectedPeerId = msgerPrivateBtn.dataset.peerId || peerId;
+        setActiveConversation('private', msgerPrivateBtn.value, selectedPeerId);
+        msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+        if (shouldDockParticipantsPanel()) {
+            msgerCPBtn.classList.remove('active');
+            isParticipantsVisible = false;
+        } else {
+            syncParticipantsPanelVisibility(false);
+        }
+        msgerInput.focus();
     });
 
     // Enter key to send private message
-    msgerPrivateMsgInput.addEventListener('keyup', (e) => {
-        if (e.keyCode === 13) {
-            e.preventDefault();
-            sendPrivateMessage();
-        }
-    });
+    if (msgerPrivateMsgInput) {
+        msgerPrivateMsgInput.addEventListener('keyup', (e) => {
+            if (e.keyCode === 13) {
+                e.preventDefault();
+                sendPrivateMessage();
+            }
+        });
 
-    msgerPrivateMsgInput.onpaste = () => {
-        isChatPasteTxt = true;
-    };
+        msgerPrivateMsgInput.onpaste = () => {
+            isChatPasteTxt = true;
+        };
+    }
 
     function sendPrivateMessage() {
         msgerPrivateMsgInput.value = filterXSS(msgerPrivateMsgInput.value.trim());
@@ -10237,7 +10868,9 @@ function addMsgerPrivateBtn(
         emitMsg(myPeerName, myPeerAvatar, toPeerName, pMsg, true, myPeerId);
         appendMessage(myPeerName, rightChatAvatar, 'right', pMsg, true, null, toPeerName);
         msgerPrivateMsgInput.value = '';
-        elemDisplay(msgerCP, false);
+        if (!shouldDockParticipantsPanel()) {
+            syncParticipantsPanelVisibility(false);
+        }
     }
 
     // Dropdown actions
@@ -10467,10 +11100,15 @@ function getLineBreaks(text) {
  * Check chat input line breaks and value length
  */
 function checkLineBreaks() {
-    msgerInput.style.height = '';
-    if (getLineBreaks(msgerInput.value) > 0 || msgerInput.value.length > 50) {
-        msgerInput.style.height = '200px';
-    }
+    if (!msgerInput) return;
+
+    msgerInput.style.height = 'auto';
+
+    const minHeight = 52;
+    const maxHeight = 160;
+    const nextHeight = Math.min(Math.max(msgerInput.scrollHeight, minHeight), maxHeight);
+
+    msgerInput.style.height = `${nextHeight}px`;
 }
 
 /**
@@ -10542,10 +11180,11 @@ async function getChatGPTmessage(msg) {
                 if (!completion) return;
                 const { message, context } = completion;
                 chatGPTcontext = context ? context : [];
-                setPeerChatAvatarImgName('left', 'ChatGPT');
-                appendMessage('ChatGPT', leftChatAvatar, 'left', message, true);
+                ensureChatGPTConversationEntry();
+                setPeerChatAvatarImgName('left', CHAT_GPT_NAME);
+                appendMessage(CHAT_GPT_NAME, images.chatgpt, 'left', message, true, null, myPeerName);
                 cleanMessageInput();
-                speechInMessages ? speechMessage(true, 'ChatGPT', message) : playSound('message');
+                speechInMessages ? speechMessage(true, CHAT_GPT_NAME, message) : playSound('message');
             }.bind(this)
         )
         .catch((err) => {
@@ -10569,13 +11208,74 @@ function hideShowEmojiPicker() {
 }
 
 /**
- * Download Chat messages in json format
- * https://developer.mozilla.org/it/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
+ * Download chat messages grouped by conversation and participant in JSON format
  */
 function downloadChatMsgs() {
+    const groupedConversations = [];
+    const groupedMessages = new Map();
+
+    chatMessages.forEach((message) => {
+        const isPrivate =
+            message.privateMsg === true ||
+            message.privateMsg === 'true' ||
+            message.privateMsg === 1 ||
+            message.privateMsg === '1';
+        const conversationPeer = message.conversationPeer || '';
+        const conversationKey = isPrivate && conversationPeer ? `private:${conversationPeer}` : 'public:room';
+
+        if (!groupedMessages.has(conversationKey)) {
+            groupedMessages.set(conversationKey, {
+                type: isPrivate ? 'private' : 'public',
+                title: isPrivate && conversationPeer ? `Private chat with ${conversationPeer}` : 'Room chat',
+                peer: conversationPeer || null,
+                participants: new Map(),
+            });
+        }
+
+        const conversation = groupedMessages.get(conversationKey);
+        if (!conversation.participants.has(message.from)) {
+            conversation.participants.set(message.from, []);
+        }
+
+        conversation.participants.get(message.from).push({
+            time: message.time,
+            from: message.from,
+            to: message.to || '',
+            msg: message.msg,
+            privateMsg: isPrivate,
+        });
+    });
+
+    groupedMessages.forEach((conversation) => {
+        const participants = [];
+
+        conversation.participants.forEach((messages, sender) => {
+            participants.push({
+                name: sender,
+                messages,
+            });
+        });
+
+        groupedConversations.push({
+            type: conversation.type,
+            title: conversation.title,
+            peer: conversation.peer,
+            participants,
+        });
+    });
+
+    const exportContent = JSON.stringify(
+        {
+            exportedAt: new Date().toISOString(),
+            roomId,
+            conversations: groupedConversations,
+        },
+        null,
+        2
+    );
     let a = document.createElement('a');
-    a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(chatMessages, null, 1));
-    a.download = getDataTimeString() + '-CHAT.txt';
+    a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(exportContent);
+    a.download = getDataTimeString() + '-CHAT.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -10840,6 +11540,9 @@ function setMyVideoStatus(status) {
             { element: myVideo, display: false },
             { element: initVideo, display: false },
         ]);
+        const myVideoWrap = getId('myVideoWrap');
+        const spinner = myVideoWrap ? myVideoWrap.querySelector('.video-loading-spinner') : null;
+        if (spinner) elemDisplay(spinner, false);
         playSound('off');
     }
 
@@ -10983,7 +11686,7 @@ function handlePeerPrivateMsg(peer_id, toPeerName, privateMsgBtnId) {
     const peerPrivateMsg = getId(privateMsgBtnId);
     peerPrivateMsg.onclick = (e) => {
         e.preventDefault();
-        sendPrivateMsgToPeer(myPeerId, toPeerName);
+        sendPrivateMsgToPeer(peer_id, toPeerName);
     };
 }
 
@@ -10993,29 +11696,24 @@ function handlePeerPrivateMsg(peer_id, toPeerName, privateMsgBtnId) {
  * @param {string} toPeerName
  */
 function sendPrivateMsgToPeer(toPeerId, toPeerName) {
-    Swal.fire({
-        background: swBg,
-        position: 'center',
-        imageUrl: images.message,
-        title: 'Send private message',
-        input: 'text',
-        showCancelButton: true,
-        confirmButtonText: `Send`,
-        showClass: { popup: 'animate__animated animate__fadeInDown' },
-        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-    }).then((result) => {
-        if (result.value) {
-            result.value = filterXSS(result.value);
-            const pMsg = checkMsg(result.value);
-            if (!pMsg) {
-                isChatPasteTxt = false;
-                return;
-            }
-            emitMsg(myPeerName, myPeerAvatar, toPeerName, pMsg, true, toPeerId);
-            appendMessage(myPeerName, rightChatAvatar, 'right', pMsg, true, null, toPeerName);
-            userLog('toast', 'Message sent to ' + toPeerName + ' 👍');
+    if (!isChatRoomVisible) {
+        showChatRoomDraggable();
+    }
+
+    setActiveConversation('private', toPeerName, toPeerId);
+    if (!isMobileDevice && canBePinned() && !isCaptionPinned) {
+        if (!isChatPinned) {
+            chatPin();
         }
-    });
+
+        msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+        msgerCPBtn.classList.remove('active');
+        isParticipantsVisible = false;
+    } else {
+        syncParticipantsPanelVisibility(false);
+    }
+
+    msgerInput.focus();
 }
 
 /**
@@ -11051,6 +11749,7 @@ function setPeerVideoStatus(peer_id, status) {
     const peerVideoPlayer = getId(peer_id + '___video');
     const peerVideoAvatarImage = getId(peer_id + '_avatar');
     const peerVideoStatus = getId(peer_id + '_videoStatus');
+    const peerVideoWrap = getId(peer_id + '_videoWrap');
 
     if (status) {
         displayElements([
@@ -11067,6 +11766,8 @@ function setPeerVideoStatus(peer_id, status) {
             { element: peerVideoPlayer, display: false },
             { element: peerVideoAvatarImage, display: true, mode: 'block' },
         ]);
+        const spinner = peerVideoWrap ? peerVideoWrap.querySelector('.video-loading-spinner') : null;
+        if (spinner) elemDisplay(spinner, false);
         if (peerVideoStatus) {
             setMediaButtonsClass([{ element: peerVideoStatus, status: false, mediaType: 'video' }]);
             setTippy(peerVideoStatus, 'Participant video is off', 'bottom');
@@ -13208,8 +13909,10 @@ function hideFileTransfer() {
  * @param {string} peer_id
  * @param {boolean} broadcast send to all (default false)
  */
-function selectFileToShare(peer_id, broadcast = false) {
+function selectFileToShare(peer_id, broadcast = false, peerName = '') {
     playSound('newMessage');
+
+    const targetLabel = !broadcast && peerName ? ` with ${peerName}` : '';
 
     Swal.fire({
         allowOutsideClick: false,
@@ -13217,7 +13920,7 @@ function selectFileToShare(peer_id, broadcast = false) {
         imageAlt: 'mirotalk-file-sharing',
         imageUrl: images.share,
         position: 'center',
-        title: 'Share file',
+        title: `Share file${targetLabel}`,
         input: 'file',
         html: `
         <div id="dropArea">
@@ -13242,7 +13945,7 @@ function selectFileToShare(peer_id, broadcast = false) {
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     }).then((result) => {
         if (result.isConfirmed) {
-            sendFileInformations(result.value, peer_id, broadcast);
+            sendFileInformations(result.value, peer_id, broadcast, peerName);
         }
     });
 
@@ -13278,7 +13981,7 @@ function selectFileToShare(peer_id, broadcast = false) {
             const file = files[0];
             console.log('Selected file:', file);
             Swal.close();
-            sendFileInformations(file, peer_id, broadcast);
+            sendFileInformations(file, peer_id, broadcast, peerName);
         }
     }
 }
@@ -13290,7 +13993,7 @@ function selectFileToShare(peer_id, broadcast = false) {
  * @param {boolean} broadcast send to all (default false)
  * @returns
  */
-function sendFileInformations(file, peer_id, broadcast = false) {
+function sendFileInformations(file, peer_id, broadcast = false, peerName = '') {
     fileToSend = file;
     // check if valid
     if (fileToSend && fileToSend.size > 0) {
@@ -13303,6 +14006,7 @@ function sendFileInformations(file, peer_id, broadcast = false) {
         if (isHtml(fileToSend.name) || !isValidFileName(fileToSend.name))
             return userLog('warning', 'Invalid file name!');
 
+        const targetPeerName = !broadcast ? filterXSS(peerName || resolvePeerNameById(peer_id) || 'Participant') : '';
         const fileInfo = {
             room_id: roomId,
             broadcast: broadcast,
@@ -13327,7 +14031,9 @@ function sendFileInformations(file, peer_id, broadcast = false) {
                 <li>Name: ${fileToSend.name}</li>
                 <li>Size: ${bytesToSize(fileToSend.size)}</li>
             </ul>`,
-            false
+            !broadcast,
+            null,
+            targetPeerName
         );
 
         // send some metadata about our file to peers in the room
@@ -13481,15 +14187,18 @@ function saveBlobToFile(blob, file) {
  * Opend and send Video URL to all peers in the room
  * @param {string} peer_id socket.id
  */
-function sendVideoUrl(peer_id = null) {
+function sendVideoUrl(peer_id = null, peer_name = '', broadcast = !peer_id) {
     playSound('newMessage');
+
+    const targetPeerName = !broadcast ? filterXSS(peer_name || resolvePeerNameById(peer_id) || 'Participant') : '';
+    const targetLabel = !broadcast && targetPeerName ? ` with ${targetPeerName}` : '';
 
     Swal.fire({
         background: swBg,
         position: 'center',
         imageUrl: images.vaShare,
-        title: 'Share a Video or Audio',
-        text: 'Paste a Video or audio URL',
+        title: `Share a Video or Audio${targetLabel}`,
+        text: `Paste a Video or audio URL${targetLabel}`,
         input: 'text',
         showCancelButton: true,
         confirmButtonText: `Share`,
@@ -13515,9 +14224,19 @@ function sendVideoUrl(peer_id = null) {
             const config = {
                 peer_id: peer_id,
                 video_src: video_url,
+                broadcast: broadcast,
             };
             openVideoUrlPlayer(config);
             emitVideoPlayer('open', config);
+            appendMessage(
+                myPeerName,
+                rightChatAvatar,
+                'right',
+                `${icons.share} Shared media: <br/><a href="${video_url}" target="_blank" rel="noopener noreferrer">${video_url}</a>`,
+                !broadcast,
+                null,
+                targetPeerName
+            );
         }
     });
 
@@ -13646,6 +14365,7 @@ function emitVideoPlayer(video_action, config = {}) {
         video_action: video_action,
         video_src: config.video_src,
         peer_id: config.peer_id,
+        broadcast: config.broadcast,
     });
 }
 
@@ -13654,12 +14374,21 @@ function emitVideoPlayer(video_action, config = {}) {
  * @param {object} config data
  */
 function handleVideoPlayer(config) {
-    const { peer_name, video_action } = config;
+    const { peer_name, video_action, video_src, broadcast } = config;
     //
     switch (video_action) {
         case 'open':
             userLog('toast', `${icons.user} ${peer_name} \n open video player`);
             openVideoUrlPlayer(config);
+            appendMessage(
+                peer_name,
+                leftChatAvatar,
+                'left',
+                `${icons.share} Shared media: <br/><a href="${video_src}" target="_blank" rel="noopener noreferrer">${video_src}</a>`,
+                !broadcast,
+                null,
+                peer_name
+            );
             break;
         case 'close':
             userLog('toast', `${icons.user} ${peer_name} \n close video player`);
@@ -13835,7 +14564,7 @@ function showAbout() {
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.69',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.80',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
         html: `
@@ -14806,6 +15535,7 @@ function handleDropdownHover() {
         const showMsgerCPDropdown = () => {
             clearTimeout(msgerCPTimeoutId);
             elemDisplay(msgerCPDropDownContent, true, 'block');
+            elemDisplay(msgerSidebarDropDownContent, false);
         };
 
         const hideMsgerCPDropdown = () => {
@@ -14818,6 +15548,27 @@ function handleDropdownHover() {
         msgerCPDropDownMenuBtn.addEventListener('mouseleave', hideMsgerCPDropdown);
         msgerCPDropDownContent.addEventListener('mouseenter', () => clearTimeout(msgerCPTimeoutId));
         msgerCPDropDownContent.addEventListener('mouseleave', hideMsgerCPDropdown);
+    }
+
+    if (msgerSidebarDropDownMenuBtn && msgerSidebarDropDownContent) {
+        let msgerSidebarTimeoutId;
+
+        const showMsgerSidebarDropdown = () => {
+            clearTimeout(msgerSidebarTimeoutId);
+            elemDisplay(msgerSidebarDropDownContent, true, 'block');
+            elemDisplay(msgerCPDropDownContent, false);
+        };
+
+        const hideMsgerSidebarDropdown = () => {
+            msgerSidebarTimeoutId = setTimeout(() => {
+                elemDisplay(msgerSidebarDropDownContent, false);
+            }, 200);
+        };
+
+        msgerSidebarDropDownMenuBtn.addEventListener('mouseenter', showMsgerSidebarDropdown);
+        msgerSidebarDropDownMenuBtn.addEventListener('mouseleave', hideMsgerSidebarDropdown);
+        msgerSidebarDropDownContent.addEventListener('mouseenter', () => clearTimeout(msgerSidebarTimeoutId));
+        msgerSidebarDropDownContent.addEventListener('mouseleave', hideMsgerSidebarDropdown);
     }
 
     // Handle Whiteboard dropdown menu hover
