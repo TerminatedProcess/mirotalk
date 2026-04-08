@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.7.85
+ * @version 1.7.94
  *
  */
 
@@ -330,6 +330,10 @@ const captionMinBtn = getId('captionMinBtn');
 const captionClean = getId('captionClean');
 const captionSaveBtn = getId('captionSaveBtn');
 const captionClose = getId('captionClose');
+const captionDropDownMenuBtn = getId('captionDropDownMenuBtn');
+const captionDropDownContent = getId('captionDropDownContent');
+const transcriptShowOnMsgEl = getId('transcriptShowOnMsg');
+const transcriptSendToAllEl = getId('transcriptSendToAll');
 const captionChat = getId('captionChat');
 const captionEmptyNotice = getId('captionEmptyNotice');
 const captionFooter = getId('captionFooter');
@@ -363,8 +367,7 @@ const pinChatByDefaultRow = getId('pinChatByDefaultRow');
 const switchPinChatByDefault = getId('switchPinChatByDefault');
 const keepAwakeButton = getId('keepAwakeButton');
 const switchKeepAwake = getId('switchKeepAwake');
-const pinCaptionByDefaultRow = getId('pinCaptionByDefaultRow');
-const switchPinCaptionByDefault = getId('switchPinCaptionByDefault');
+
 const switchPushToTalk = getId('switchPushToTalk');
 const switchAudioPitchBar = getId('switchAudioPitchBar');
 const audioInputSelect = getId('audioSource');
@@ -647,6 +650,8 @@ let leftChatAvatar;
 let rightChatAvatar;
 let chatMessagesId = 0;
 let showChatOnMessage = true;
+let transcriptShowOnMsg = true;
+let transcriptSendToAll = true;
 let isChatPinned = false;
 let isCaptionPinned = false;
 let isChatRoomVisible = false;
@@ -656,7 +661,6 @@ let isChatEmojiVisible = false;
 let isChatMarkdownOn = false;
 let isChatPasteTxt = false;
 let pinChatByDefault = false;
-let pinCaptionByDefault = true;
 let speechInMessages = false;
 let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let transcripts = []; // collect all the transcripts to save it later if you need
@@ -689,6 +693,7 @@ let isAudioPitchBar = true;
 let isPushToTalkActive = false;
 let isSpaceDown = false;
 let isShortcutsEnabled = false;
+let themeCardDebounce = null;
 
 // recording
 let mediaRecorder;
@@ -832,8 +837,7 @@ function setButtonsToolTip() {
     setTippy(captionMinBtn, 'Minimize', 'bottom');
     setTippy(captionTogglePin, 'Toggle caption pin', 'bottom');
     setTippy(captionTheme, 'Ghost theme', 'bottom');
-    setTippy(captionClean, 'Clean the messages', 'bottom');
-    setTippy(captionSaveBtn, 'Save the messages', 'bottom');
+    setTippy(transcriptSendToAllEl, 'When enabled, your transcription will be sent to all participants', 'bottom');
     setTippy(speechRecognitionIcon, 'Status', 'bottom');
     setTippy(speechRecognitionStart, 'Start caption', 'top');
     setTippy(speechRecognitionStop, 'Stop caption', 'top');
@@ -856,7 +860,6 @@ function setButtonsToolTip() {
     setTippy(switchShare, "Show 'Share Room' popup on join.", 'right');
     setTippy(switchKeepButtonsVisible, 'Keep buttons always visible', 'right');
     setTippy(switchPinChatByDefault, 'Open chat pinned by default', 'right');
-    setTippy(switchPinCaptionByDefault, 'Open transcription pinned by default', 'right');
     setTippy(switchKeepAwake, 'Prevent the device from sleeping (if supported)', 'right');
     setTippy(recImage, 'Toggle recording', 'right');
     setTippy(networkIP, 'IP address associated with the ICE candidate', 'right');
@@ -1336,7 +1339,8 @@ function initCursorLightEffect() {
 /**
  * On body load Get started
  */
-function initClientPeer() {
+async function initClientPeer() {
+    await getThemes();
     setTheme();
 
     if (!isWebRTCSupported) {
@@ -1705,6 +1709,99 @@ async function getButtons() {
         }
     } catch (error) {
         console.error('AXIOS GET CONFIG ERROR', error.message);
+    }
+}
+
+/**
+ * Get Themes config from server side and merge with built-in defaults
+ */
+async function getThemes() {
+    try {
+        const response = await axios.get('/themes', {
+            timeout: 5000,
+        });
+        const serverThemes = response.data.message;
+        if (serverThemes) {
+            // Deep merge each theme: server overrides take precedence
+            for (const [name, vars] of Object.entries(serverThemes)) {
+                themeMap[name] = themeMap[name] ? { ...themeMap[name], ...vars } : vars;
+            }
+            renderDynamicThemeCards();
+            console.log('AXIOS ROOM THEMES SETTINGS', {
+                serverThemes: serverThemes,
+                clientThemes: Object.keys(themeMap),
+            });
+        }
+    } catch (error) {
+        console.error('AXIOS GET THEMES ERROR', error.message);
+    }
+}
+
+/**
+ * Dynamically add theme cards & dropdown options for server-defined themes
+ * that are not part of the built-in defaults.
+ */
+function renderDynamicThemeCards() {
+    const grid = getId('themeCardsGrid');
+    if (!grid) return;
+
+    const builtInThemes = new Set(Array.from(themeSelect.options).map((opt) => opt.value));
+
+    const iconPool = [
+        'fa-solid fa-wand-magic-sparkles',
+        'fa-solid fa-palette',
+        'fa-solid fa-paint-roller',
+        'fa-solid fa-swatchbook',
+        'fa-solid fa-brush',
+        'fa-solid fa-eye-dropper',
+        'fa-solid fa-fill-drip',
+        'fa-solid fa-circle-half-stroke',
+    ];
+    let iconIndex = 0;
+
+    for (const [name, vars] of Object.entries(themeMap)) {
+        if (builtInThemes.has(name)) continue;
+
+        // Add <option> to the hidden select
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+        themeSelect.appendChild(option);
+
+        const index = themeSelect.options.length - 1;
+
+        // Pick an icon and a color from the theme's --dd-color
+        const iconClass = iconPool[iconIndex % iconPool.length];
+        iconIndex++;
+        const iconColor = vars['--dd-color'] || '#c0c0c0';
+
+        // Create the card
+        const card = document.createElement('div');
+        card.className = 'theme-card';
+        card.dataset.theme = name;
+        card.dataset.index = index;
+        card.innerHTML = `<i class="${iconClass}"></i><span>${option.textContent}</span>`;
+
+        // Apply dynamic icon color via inline style
+        const icon = card.querySelector('i');
+        icon.style.color = iconColor;
+
+        // Set dynamic active border color
+        card.style.setProperty('--dynamic-theme-color', iconColor);
+
+        // Click handler (same logic as built-in cards)
+        card.onclick = () => {
+            if (card.classList.contains('disabled')) return;
+            themeSelect.selectedIndex = index;
+            updateThemeCardsActive();
+            if (themeCardDebounce) clearTimeout(themeCardDebounce);
+            themeCardDebounce = setTimeout(() => {
+                themeCardDebounce = null;
+                themeSelect.dispatchEvent(new Event('change'));
+            }, 200);
+        };
+
+        grid.appendChild(card);
     }
 }
 
@@ -3111,27 +3208,190 @@ function handleRemovePeer(config) {
 }
 
 /**
+ * Theme definitions — each key maps to the CSS custom properties for that theme
+ */
+let themeMap = {
+    dark: {
+        '--body-bg': 'radial-gradient(#2a2a2e, #121214)',
+        '--msger-bg': 'radial-gradient(#2a2a2e, #121214)',
+        '--msger-private-bg': 'radial-gradient(#2a2a2e, #121214)',
+        '--wb-bg': 'radial-gradient(#2a2a2e, #121214)',
+        '--elem-border-color': '1px solid rgba(255, 255, 255, 0.08)',
+        '--navbar-bg': 'rgba(18, 18, 20, 0.85)',
+        '--select-bg': '#333338',
+        '--tab-btn-active': '#3d3d42',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#2c2c30',
+        '--right-msg-bg': '#3a3a40',
+        '--private-msg-bg': '#252528',
+        '--btn-bar-bg-color': '#E8E8EC',
+        '--btn-bar-color': '#121214',
+        '--btns-bg-color': 'rgba(18, 18, 20, 0.75)',
+        '--dd-color': '#E8E8EC',
+    },
+    grey: {
+        '--body-bg': 'radial-gradient(#3b3f47, #1e2028)',
+        '--msger-bg': 'radial-gradient(#3b3f47, #1e2028)',
+        '--msger-private-bg': 'radial-gradient(#3b3f47, #1e2028)',
+        '--wb-bg': 'radial-gradient(#434750, #252830)',
+        '--elem-border-color': '1px solid rgba(255, 255, 255, 0.08)',
+        '--navbar-bg': 'rgba(30, 32, 40, 0.85)',
+        '--select-bg': '#32363e',
+        '--tab-btn-active': '#484c55',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.45)',
+        '--left-msg-bg': '#33373f',
+        '--right-msg-bg': '#434750',
+        '--private-msg-bg': '#2d3038',
+        '--btn-bar-bg-color': '#E8E8EC',
+        '--btn-bar-color': '#1e2028',
+        '--btns-bg-color': 'rgba(30, 32, 40, 0.75)',
+        '--dd-color': '#E0E0E6',
+    },
+    green: {
+        '--body-bg': 'radial-gradient(#1a3a32, #0d1f1a)',
+        '--msger-bg': 'radial-gradient(#1a3a32, #0d1f1a)',
+        '--msger-private-bg': 'radial-gradient(#1a3a32, #0d1f1a)',
+        '--wb-bg': 'radial-gradient(#1a3a32, #0d1f1a)',
+        '--elem-border-color': '1px solid rgba(72, 199, 154, 0.15)',
+        '--navbar-bg': 'rgba(13, 31, 26, 0.88)',
+        '--select-bg': '#17332b',
+        '--tab-btn-active': '#22493e',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#1e3f36',
+        '--right-msg-bg': '#14302a',
+        '--private-msg-bg': '#153028',
+        '--btn-bar-bg-color': '#E8F5E9',
+        '--btn-bar-color': '#0d1f1a',
+        '--btns-bg-color': 'rgba(13, 31, 26, 0.75)',
+        '--dd-color': '#48C79A',
+    },
+    blue: {
+        '--body-bg': 'radial-gradient(#1b2a4a, #0f1729)',
+        '--msger-bg': 'radial-gradient(#1b2a4a, #0f1729)',
+        '--msger-private-bg': 'radial-gradient(#1b2a4a, #0f1729)',
+        '--wb-bg': 'radial-gradient(#1b2a4a, #0f1729)',
+        '--elem-border-color': '1px solid rgba(96, 165, 250, 0.15)',
+        '--navbar-bg': 'rgba(15, 23, 41, 0.88)',
+        '--select-bg': '#182440',
+        '--tab-btn-active': '#243656',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#1e2e50',
+        '--right-msg-bg': '#152038',
+        '--private-msg-bg': '#172545',
+        '--btn-bar-bg-color': '#E3F2FD',
+        '--btn-bar-color': '#0f1729',
+        '--btns-bg-color': 'rgba(15, 23, 41, 0.75)',
+        '--dd-color': '#60A5FA',
+    },
+    red: {
+        '--body-bg': 'radial-gradient(#3d1520, #1c0a10)',
+        '--msger-bg': 'radial-gradient(#3d1520, #1c0a10)',
+        '--msger-private-bg': 'radial-gradient(#3d1520, #1c0a10)',
+        '--wb-bg': 'radial-gradient(#3d1520, #1c0a10)',
+        '--elem-border-color': '1px solid rgba(248, 113, 113, 0.15)',
+        '--navbar-bg': 'rgba(28, 10, 16, 0.88)',
+        '--select-bg': '#35121c',
+        '--tab-btn-active': '#4d1a28',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#421824',
+        '--right-msg-bg': '#2e1018',
+        '--private-msg-bg': '#381420',
+        '--btn-bar-bg-color': '#FDE8E8',
+        '--btn-bar-color': '#1c0a10',
+        '--btns-bg-color': 'rgba(28, 10, 16, 0.75)',
+        '--dd-color': '#F87171',
+    },
+    purple: {
+        '--body-bg': 'radial-gradient(#2a1840, #150d24)',
+        '--msger-bg': 'radial-gradient(#2a1840, #150d24)',
+        '--msger-private-bg': 'radial-gradient(#2a1840, #150d24)',
+        '--wb-bg': 'radial-gradient(#2a1840, #150d24)',
+        '--elem-border-color': '1px solid rgba(192, 132, 252, 0.15)',
+        '--navbar-bg': 'rgba(21, 13, 36, 0.88)',
+        '--select-bg': '#241538',
+        '--tab-btn-active': '#351f4e',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#2e1c45',
+        '--right-msg-bg': '#201230',
+        '--private-msg-bg': '#28163c',
+        '--btn-bar-bg-color': '#F3E8FD',
+        '--btn-bar-color': '#150d24',
+        '--btns-bg-color': 'rgba(21, 13, 36, 0.75)',
+        '--dd-color': '#C084FC',
+    },
+    orange: {
+        '--body-bg': 'radial-gradient(#3d2410, #1e1208)',
+        '--msger-bg': 'radial-gradient(#3d2410, #1e1208)',
+        '--msger-private-bg': 'radial-gradient(#3d2410, #1e1208)',
+        '--wb-bg': 'radial-gradient(#3d2410, #1e1208)',
+        '--elem-border-color': '1px solid rgba(251, 191, 36, 0.15)',
+        '--navbar-bg': 'rgba(30, 18, 8, 0.88)',
+        '--select-bg': '#352010',
+        '--tab-btn-active': '#4d3018',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#422814',
+        '--right-msg-bg': '#2e1c0e',
+        '--private-msg-bg': '#382210',
+        '--btn-bar-bg-color': '#FFF3E0',
+        '--btn-bar-color': '#1e1208',
+        '--btns-bg-color': 'rgba(30, 18, 8, 0.75)',
+        '--dd-color': '#FBBF24',
+    },
+    yellow: {
+        '--body-bg': 'radial-gradient(#3a3418, #1e1c0e)',
+        '--msger-bg': 'radial-gradient(#3a3418, #1e1c0e)',
+        '--msger-private-bg': 'radial-gradient(#3a3418, #1e1c0e)',
+        '--wb-bg': 'radial-gradient(#3a3418, #1e1c0e)',
+        '--elem-border-color': '1px solid rgba(250, 204, 21, 0.15)',
+        '--navbar-bg': 'rgba(30, 28, 14, 0.88)',
+        '--select-bg': '#322e15',
+        '--tab-btn-active': '#4a441e',
+        '--box-shadow': '0px 4px 12px 0px rgba(0, 0, 0, 0.5)',
+        '--left-msg-bg': '#3e381c',
+        '--right-msg-bg': '#2c2812',
+        '--private-msg-bg': '#363018',
+        '--btn-bar-bg-color': '#FFFDE7',
+        '--btn-bar-color': '#1e1c0e',
+        '--btns-bg-color': 'rgba(30, 28, 14, 0.75)',
+        '--dd-color': '#FACC15',
+    },
+};
+
+/**
+ * Apply a set of CSS custom properties from a theme vars object
+ * @param {object} vars theme CSS properties map
+ */
+function applyThemeVars(vars) {
+    swBg = vars['--body-bg'];
+    for (const [prop, value] of Object.entries(vars)) {
+        setSP(prop, value);
+    }
+    document.body.style.background = vars['--body-bg'];
+}
+
+/**
  * Set custom theme
  */
 function setCustomTheme() {
     const color = themeCustom.color;
-    swBg = `radial-gradient(${color}, ${color})`;
-    setSP('--body-bg', `radial-gradient(${color}, ${color})`);
-    setSP('--msger-bg', `radial-gradient(${color}, ${color})`);
-    setSP('--msger-private-bg', `radial-gradient(${color}, ${color})`);
-    setSP('--wb-bg', `radial-gradient(${color}, ${color})`);
-    setSP('--elem-border-color', '0.5px solid rgb(255 255 255 / 32%)');
-    setSP('--navbar-bg', 'rgba(0, 0, 0, 0.2)');
-    setSP('--select-bg', `${color}`);
-    setSP('--tab-btn-active', `${color}`);
-    setSP('--box-shadow', '0px 8px 16px 0px rgba(0, 0, 0, 0.2)');
-    setSP('--left-msg-bg', '#252d31');
-    setSP('--right-msg-bg', `${color}`);
-    setSP('--private-msg-bg', '#6b1226');
-    setSP('--btn-bar-bg-color', '#FFFFFF');
-    setSP('--btn-bar-color', '#000000');
-    setSP('--btns-bg-color', `${color}`);
-    document.body.style.background = `radial-gradient(${color}, ${color})`;
+    const bg = `radial-gradient(${color}, ${color})`;
+    applyThemeVars({
+        '--body-bg': bg,
+        '--msger-bg': bg,
+        '--msger-private-bg': bg,
+        '--wb-bg': bg,
+        '--elem-border-color': '0.5px solid rgb(255 255 255 / 32%)',
+        '--navbar-bg': 'rgba(0, 0, 0, 0.2)',
+        '--select-bg': color,
+        '--tab-btn-active': color,
+        '--box-shadow': '0px 8px 16px 0px rgba(0, 0, 0, 0.2)',
+        '--left-msg-bg': '#252d31',
+        '--right-msg-bg': color,
+        '--private-msg-bg': '#6b1226',
+        '--btn-bar-bg-color': '#FFFFFF',
+        '--btn-bar-color': '#000000',
+        '--btns-bg-color': color,
+    });
 }
 
 /**
@@ -3142,191 +3402,69 @@ function setTheme() {
 
     mirotalkTheme.selectedIndex = lsSettings.theme;
     const theme = mirotalkTheme.value;
-    switch (theme) {
-        case 'dark':
-            // dark theme — refined neutral with subtle warm undertone
-            swBg = 'radial-gradient(#2a2a2e, #121214)';
-            setSP('--body-bg', 'radial-gradient(#2a2a2e, #121214)');
-            setSP('--msger-bg', 'radial-gradient(#2a2a2e, #121214)');
-            setSP('--msger-private-bg', 'radial-gradient(#2a2a2e, #121214)');
-            setSP('--wb-bg', 'radial-gradient(#2a2a2e, #121214)');
-            setSP('--elem-border-color', '1px solid rgba(255, 255, 255, 0.08)');
-            setSP('--navbar-bg', 'rgba(18, 18, 20, 0.85)');
-            setSP('--select-bg', '#333338');
-            setSP('--tab-btn-active', '#3d3d42');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--left-msg-bg', '#2c2c30');
-            setSP('--right-msg-bg', '#3a3a40');
-            setSP('--private-msg-bg', '#252528');
-            setSP('--btn-bar-bg-color', '#E8E8EC');
-            setSP('--btn-bar-color', '#121214');
-            setSP('--btns-bg-color', 'rgba(18, 18, 20, 0.75)');
-            setSP('--dd-color', '#E8E8EC');
-            document.body.style.background = 'radial-gradient(#2a2a2e, #121214)';
-            mirotalkTheme.selectedIndex = 0;
-            break;
-        case 'grey':
-            // grey theme — modern slate with balanced cool tones
-            swBg = 'radial-gradient(#3b3f47, #1e2028)';
-            setSP('--body-bg', 'radial-gradient(#3b3f47, #1e2028)');
-            setSP('--msger-bg', 'radial-gradient(#3b3f47, #1e2028)');
-            setSP('--wb-bg', 'radial-gradient(#434750, #252830)');
-            setSP('--elem-border-color', '1px solid rgba(255, 255, 255, 0.08)');
-            setSP('--navbar-bg', 'rgba(30, 32, 40, 0.85)');
-            setSP('--select-bg', '#32363e');
-            setSP('--tab-btn-active', '#484c55');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.45)');
-            setSP('--msger-private-bg', 'radial-gradient(#3b3f47, #1e2028)');
-            setSP('--left-msg-bg', '#33373f');
-            setSP('--right-msg-bg', '#434750');
-            setSP('--private-msg-bg', '#2d3038');
-            setSP('--btn-bar-bg-color', '#E8E8EC');
-            setSP('--btn-bar-color', '#1e2028');
-            setSP('--btns-bg-color', 'rgba(30, 32, 40, 0.75)');
-            setSP('--dd-color', '#E0E0E6');
-            document.body.style.background = 'radial-gradient(#3b3f47, #1e2028)';
-            mirotalkTheme.selectedIndex = 1;
-            break;
-        case 'green':
-            // green theme — modern emerald with depth
-            swBg = 'radial-gradient(#1a3a32, #0d1f1a)';
-            setSP('--body-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
-            setSP('--msger-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
-            setSP('--wb-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
-            setSP('--elem-border-color', '1px solid rgba(72, 199, 154, 0.15)');
-            setSP('--navbar-bg', 'rgba(13, 31, 26, 0.88)');
-            setSP('--select-bg', '#17332b');
-            setSP('--tab-btn-active', '#22493e');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#1a3a32, #0d1f1a)');
-            setSP('--left-msg-bg', '#1e3f36');
-            setSP('--right-msg-bg', '#14302a');
-            setSP('--private-msg-bg', '#153028');
-            setSP('--btn-bar-bg-color', '#E8F5E9');
-            setSP('--btn-bar-color', '#0d1f1a');
-            setSP('--btns-bg-color', 'rgba(13, 31, 26, 0.75)');
-            setSP('--dd-color', '#48C79A');
-            document.body.style.background = 'radial-gradient(#1a3a32, #0d1f1a)';
-            mirotalkTheme.selectedIndex = 2;
-            break;
-        case 'blue':
-            // blue theme — modern deep blue with clarity
-            swBg = 'radial-gradient(#1b2a4a, #0f1729)';
-            setSP('--body-bg', 'radial-gradient(#1b2a4a, #0f1729)');
-            setSP('--msger-bg', 'radial-gradient(#1b2a4a, #0f1729)');
-            setSP('--wb-bg', 'radial-gradient(#1b2a4a, #0f1729)');
-            setSP('--elem-border-color', '1px solid rgba(96, 165, 250, 0.15)');
-            setSP('--navbar-bg', 'rgba(15, 23, 41, 0.88)');
-            setSP('--select-bg', '#182440');
-            setSP('--tab-btn-active', '#243656');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#1b2a4a, #0f1729)');
-            setSP('--left-msg-bg', '#1e2e50');
-            setSP('--right-msg-bg', '#152038');
-            setSP('--private-msg-bg', '#172545');
-            setSP('--btn-bar-bg-color', '#E3F2FD');
-            setSP('--btn-bar-color', '#0f1729');
-            setSP('--btns-bg-color', 'rgba(15, 23, 41, 0.75)');
-            setSP('--dd-color', '#60A5FA');
-            document.body.style.background = 'radial-gradient(#1b2a4a, #0f1729)';
-            mirotalkTheme.selectedIndex = 3;
-            break;
-        case 'red':
-            // red theme — modern crimson with warmth
-            swBg = 'radial-gradient(#3d1520, #1c0a10)';
-            setSP('--body-bg', 'radial-gradient(#3d1520, #1c0a10)');
-            setSP('--msger-bg', 'radial-gradient(#3d1520, #1c0a10)');
-            setSP('--wb-bg', 'radial-gradient(#3d1520, #1c0a10)');
-            setSP('--elem-border-color', '1px solid rgba(248, 113, 113, 0.15)');
-            setSP('--navbar-bg', 'rgba(28, 10, 16, 0.88)');
-            setSP('--select-bg', '#35121c');
-            setSP('--tab-btn-active', '#4d1a28');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#3d1520, #1c0a10)');
-            setSP('--left-msg-bg', '#421824');
-            setSP('--right-msg-bg', '#2e1018');
-            setSP('--private-msg-bg', '#381420');
-            setSP('--btn-bar-bg-color', '#FDE8E8');
-            setSP('--btn-bar-color', '#1c0a10');
-            setSP('--btns-bg-color', 'rgba(28, 10, 16, 0.75)');
-            setSP('--dd-color', '#F87171');
-            document.body.style.background = 'radial-gradient(#3d1520, #1c0a10)';
-            mirotalkTheme.selectedIndex = 4;
-            break;
-        case 'purple':
-            // purple theme — modern violet with elegance
-            swBg = 'radial-gradient(#2a1840, #150d24)';
-            setSP('--body-bg', 'radial-gradient(#2a1840, #150d24)');
-            setSP('--msger-bg', 'radial-gradient(#2a1840, #150d24)');
-            setSP('--wb-bg', 'radial-gradient(#2a1840, #150d24)');
-            setSP('--elem-border-color', '1px solid rgba(192, 132, 252, 0.15)');
-            setSP('--navbar-bg', 'rgba(21, 13, 36, 0.88)');
-            setSP('--select-bg', '#241538');
-            setSP('--tab-btn-active', '#351f4e');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#2a1840, #150d24)');
-            setSP('--left-msg-bg', '#2e1c45');
-            setSP('--right-msg-bg', '#201230');
-            setSP('--private-msg-bg', '#28163c');
-            setSP('--btn-bar-bg-color', '#F3E8FD');
-            setSP('--btn-bar-color', '#150d24');
-            setSP('--btns-bg-color', 'rgba(21, 13, 36, 0.75)');
-            setSP('--dd-color', '#C084FC');
-            document.body.style.background = 'radial-gradient(#2a1840, #150d24)';
-            mirotalkTheme.selectedIndex = 5;
-            break;
-        case 'orange':
-            // orange theme — modern amber with depth
-            swBg = 'radial-gradient(#3d2410, #1e1208)';
-            setSP('--body-bg', 'radial-gradient(#3d2410, #1e1208)');
-            setSP('--msger-bg', 'radial-gradient(#3d2410, #1e1208)');
-            setSP('--wb-bg', 'radial-gradient(#3d2410, #1e1208)');
-            setSP('--elem-border-color', '1px solid rgba(251, 191, 36, 0.15)');
-            setSP('--navbar-bg', 'rgba(30, 18, 8, 0.88)');
-            setSP('--select-bg', '#352010');
-            setSP('--tab-btn-active', '#4d3018');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#3d2410, #1e1208)');
-            setSP('--left-msg-bg', '#422814');
-            setSP('--right-msg-bg', '#2e1c0e');
-            setSP('--private-msg-bg', '#382210');
-            setSP('--btn-bar-bg-color', '#FFF3E0');
-            setSP('--btn-bar-color', '#1e1208');
-            setSP('--btns-bg-color', 'rgba(30, 18, 8, 0.75)');
-            setSP('--dd-color', '#FBBF24');
-            document.body.style.background = 'radial-gradient(#3d2410, #1e1208)';
-            mirotalkTheme.selectedIndex = 6;
-            break;
-        case 'yellow':
-            // yellow theme — modern gold with sophistication
-            swBg = 'radial-gradient(#3a3418, #1e1c0e)';
-            setSP('--body-bg', 'radial-gradient(#3a3418, #1e1c0e)');
-            setSP('--msger-bg', 'radial-gradient(#3a3418, #1e1c0e)');
-            setSP('--wb-bg', 'radial-gradient(#3a3418, #1e1c0e)');
-            setSP('--elem-border-color', '1px solid rgba(250, 204, 21, 0.15)');
-            setSP('--navbar-bg', 'rgba(30, 28, 14, 0.88)');
-            setSP('--select-bg', '#322e15');
-            setSP('--tab-btn-active', '#4a441e');
-            setSP('--box-shadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.5)');
-            setSP('--msger-private-bg', 'radial-gradient(#3a3418, #1e1c0e)');
-            setSP('--left-msg-bg', '#3e381c');
-            setSP('--right-msg-bg', '#2c2812');
-            setSP('--private-msg-bg', '#363018');
-            setSP('--btn-bar-bg-color', '#FFFDE7');
-            setSP('--btn-bar-color', '#1e1c0e');
-            setSP('--btns-bg-color', 'rgba(30, 28, 14, 0.75)');
-            setSP('--dd-color', '#FACC15');
-            document.body.style.background = 'radial-gradient(#3a3418, #1e1c0e)';
-            mirotalkTheme.selectedIndex = 7;
-            break;
-        // ...
-        default:
-            console.log('No theme found');
-            break;
+    const vars = themeMap[theme];
+
+    if (!vars) {
+        console.log('No theme found');
+        return;
     }
+
+    applyThemeVars(vars);
+
+    const themeNames = Object.keys(themeMap);
+    mirotalkTheme.selectedIndex = themeNames.indexOf(theme);
+
     wbIsBgTransparent = false;
     //setButtonsBarPosition(mainButtonsBarPosition);
+    updateThemeCardsActive();
 }
+
+function updateThemeCardsActive() {
+    const cards = document.querySelectorAll('.theme-card');
+    cards.forEach((card) => {
+        const isActive = parseInt(card.dataset.index) === themeSelect.selectedIndex;
+        card.classList.toggle('active', isActive);
+        // For dynamic (server-added) cards, apply active border/shadow via inline style
+        const dynamicColor = card.style.getPropertyValue('--dynamic-theme-color');
+        if (dynamicColor) {
+            card.style.borderColor = isActive ? dynamicColor : '';
+            card.style.boxShadow = isActive ? `0 0 12px ${dynamicColor}33` : '';
+        }
+    });
+}
+
+function updateThemeCardsDisabled() {
+    const cards = document.querySelectorAll('.theme-card');
+    cards.forEach((card) => {
+        card.classList.toggle('disabled', themeSelect.disabled);
+    });
+}
+
+/**
+ * Buttons bar position definitions
+ */
+const buttonsBarPositionMap = {
+    vertical: {
+        // bottomButtons horizontally
+        '--bottom-btns-top': 'auto',
+        '--bottom-btns-left': '50%',
+        '--bottom-btns-bottom': '0',
+        '--bottom-btns-translate-X': '-50%',
+        '--bottom-btns-translate-Y': '0%',
+        '--bottom-btns-margin-bottom': '16px',
+        '--bottom-btns-flex-direction': 'row',
+    },
+    horizontal: {
+        // bottomButtons vertically
+        '--bottom-btns-top': '50%',
+        '--bottom-btns-left': '15px',
+        '--bottom-btns-bottom': 'auto',
+        '--bottom-btns-translate-X': '0%',
+        '--bottom-btns-translate-Y': '-50%',
+        '--bottom-btns-margin-bottom': '0',
+        '--bottom-btns-flex-direction': 'column',
+    },
+};
 
 /**
  * Set buttons bar position
@@ -3336,30 +3474,15 @@ function setButtonsBarPosition(position) {
     if (!position || isMobileDevice) return;
 
     mainButtonsBarPosition = position;
-    switch (mainButtonsBarPosition) {
-        case 'vertical':
-            // bottomButtons horizontally
-            setSP('--bottom-btns-top', 'auto');
-            setSP('--bottom-btns-left', '50%');
-            setSP('--bottom-btns-bottom', '0');
-            setSP('--bottom-btns-translate-X', '-50%');
-            setSP('--bottom-btns-translate-Y', '0%');
-            setSP('--bottom-btns-margin-bottom', '16px');
-            setSP('--bottom-btns-flex-direction', 'row');
-            break;
-        case 'horizontal':
-            // bottomButtons vertically
-            setSP('--bottom-btns-top', '50%');
-            setSP('--bottom-btns-left', '15px');
-            setSP('--bottom-btns-bottom', 'auto');
-            setSP('--bottom-btns-translate-X', '0%');
-            setSP('--bottom-btns-translate-Y', '-50%');
-            setSP('--bottom-btns-margin-bottom', '0');
-            setSP('--bottom-btns-flex-direction', 'column');
-            break;
-        default:
-            console.log('No position found');
-            break;
+    const vars = buttonsBarPositionMap[mainButtonsBarPosition];
+
+    if (!vars) {
+        console.log('No position found');
+        return;
+    }
+
+    for (const [prop, value] of Object.entries(vars)) {
+        setSP(prop, value);
     }
     refreshMainButtonsToolTipPlacement();
 }
@@ -6324,6 +6447,37 @@ function setCaptionRoomBtn() {
             userLog('info', 'No captions to save');
         });
 
+        // dropdown caption menu
+        // Prevent drag handler on captionHeader from intercepting dropdown interactions
+        captionDropDownContent.addEventListener('mousedown', (e) => e.stopPropagation());
+        captionDropDownMenuBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        captionDropDownMenuBtn.addEventListener('click', () => {
+            toggleCaptionDropDownMenu();
+        });
+
+        // transcript show on message
+        transcriptShowOnMsgEl.addEventListener('change', (e) => {
+            playSound('switch');
+            transcriptShowOnMsg = e.currentTarget.checked;
+            transcriptShowOnMsg
+                ? msgPopup('info', 'Caption will be shown, when you receive a new transcript', 'top-end', 3000)
+                : msgPopup('info', 'Caption will not be shown, when you receive a new transcript', 'top-end', 3000);
+            lsSettings.transcript_show_on_msg = transcriptShowOnMsg;
+            lS.setSettings(lsSettings);
+        });
+
+        // transcript send to all
+        transcriptSendToAllEl.addEventListener('change', (e) => {
+            playSound('switch');
+            transcriptSendToAll = e.currentTarget.checked;
+            transcriptSendToAll
+                ? msgPopup('info', 'Transcription will be sent to all participants', 'top-end', 3000)
+                : msgPopup('info', 'Transcription will not be sent to participants', 'top-end', 3000);
+            lsSettings.transcript_send_to_all = transcriptSendToAll;
+            lS.setSettings(lsSettings);
+        });
+
         // close caption box - show left button and status menu if hide
         captionClose.addEventListener('click', (e) => {
             captionMinimize();
@@ -6957,21 +7111,12 @@ function setMySettingsBtn() {
 
     if (!isDesktopDevice) {
         elemDisplay(pinChatByDefaultRow, false);
-        elemDisplay(pinCaptionByDefaultRow, false);
     } else {
         switchPinChatByDefault.addEventListener('change', (e) => {
             pinChatByDefault = e.currentTarget.checked;
             lsSettings.pin_chat_by_default = pinChatByDefault;
             lS.setSettings(lsSettings);
             userLog('toast', `Chat opens pinned by default ${pinChatByDefault ? 'ON' : 'OFF'}`);
-            playSound('switch');
-        });
-
-        switchPinCaptionByDefault.addEventListener('change', (e) => {
-            pinCaptionByDefault = e.currentTarget.checked;
-            lsSettings.pin_caption_by_default = pinCaptionByDefault;
-            lS.setSettings(lsSettings);
-            userLog('toast', `Transcription opens pinned by default ${pinCaptionByDefault ? 'ON' : 'OFF'}`);
             playSound('switch');
         });
     }
@@ -7019,6 +7164,7 @@ function setMySettingsBtn() {
     keepCustomTheme.onchange = (e) => {
         themeCustom.keep = e.currentTarget.checked;
         themeSelect.disabled = themeCustom.keep;
+        updateThemeCardsDisabled();
         lsSettings.theme_custom = themeCustom.keep;
         lsSettings.theme_color = themeCustom.color;
         lS.setSettings(lsSettings);
@@ -7280,6 +7426,20 @@ function setupMySettings() {
         lS.setSettings(lsSettings);
         setTheme();
     });
+
+    document.querySelectorAll('.theme-card').forEach((card) => {
+        card.onclick = () => {
+            if (card.classList.contains('disabled')) return;
+            const index = parseInt(card.dataset.index);
+            themeSelect.selectedIndex = index;
+            updateThemeCardsActive();
+            if (themeCardDebounce) clearTimeout(themeCardDebounce);
+            themeCardDebounce = setTimeout(() => {
+                themeCardDebounce = null;
+                themeSelect.dispatchEvent(new Event('change'));
+            }, 200);
+        };
+    });
     // video object fit
     videoObjFitSelect.addEventListener('change', (e) => {
         lsSettings.video_obj_fit = videoObjFitSelect.selectedIndex;
@@ -7502,11 +7662,14 @@ function setKeyboardShortcuts(enabled) {
  */
 function loadSettingsFromLocalStorage() {
     showChatOnMessage = lsSettings.show_chat_on_msg;
+    transcriptShowOnMsg = lsSettings.transcript_show_on_msg !== undefined ? lsSettings.transcript_show_on_msg : true;
+    transcriptSendToAll = lsSettings.transcript_send_to_all !== undefined ? lsSettings.transcript_send_to_all : true;
     speechInMessages = lsSettings.speech_in_msg;
     pinChatByDefault = lsSettings.pin_chat_by_default;
-    pinCaptionByDefault = lsSettings.pin_caption_by_default;
     msgerShowChatOnMsg.checked = showChatOnMessage;
     msgerSpeechMsg.checked = speechInMessages;
+    transcriptShowOnMsgEl.checked = transcriptShowOnMsg;
+    transcriptSendToAllEl.checked = transcriptSendToAll;
     screenFpsSelect.selectedIndex = lsSettings.screen_fps;
     videoFpsSelect.selectedIndex = lsSettings.video_fps;
     screenFpsSelectedIndex = screenFpsSelect.selectedIndex;
@@ -7521,11 +7684,11 @@ function loadSettingsFromLocalStorage() {
     switchShare.checked = notify;
     switchKeepButtonsVisible.checked = isKeepButtonsVisible;
     switchPinChatByDefault.checked = pinChatByDefault;
-    switchPinCaptionByDefault.checked = pinCaptionByDefault;
     switchAudioPitchBar.checked = isAudioPitchBar;
     switchShortcuts.checked = isShortcutsEnabled;
     keepCustomTheme.checked = themeCustom.keep;
     themeSelect.disabled = themeCustom.keep;
+    updateThemeCardsDisabled();
     themeCustom.input.value = themeCustom.color;
 
     switchNoiseSuppression.checked = lsSettings.mic_noise_suppression;
@@ -9587,7 +9750,7 @@ function showCaptionDraggable() {
 
     isCaptionBoxVisible = true;
 
-    if (isDesktopDevice && canBePinned() && pinCaptionByDefault && !isChatPinned && !isCaptionPinned) {
+    if (isDesktopDevice && canBePinned() && !isChatPinned && !isCaptionPinned) {
         captionPin();
     }
 
@@ -9603,12 +9766,20 @@ function toggleChatDropDownMenu() {
         : (msgerDropDownContent.style.display = 'block');
 }
 
+function toggleCaptionDropDownMenu() {
+    captionDropDownContent.style.display === 'block'
+        ? (captionDropDownContent.style.display = 'none')
+        : (captionDropDownContent.style.display = 'block');
+}
+
 function closeMsgerDropdownMenus() {
-    [msgerDropDownContent, msgerCPDropDownContent, msgerSidebarDropDownContent].forEach((menuEl) => {
-        if (menuEl) {
-            elemDisplay(menuEl, false);
+    [msgerDropDownContent, msgerCPDropDownContent, msgerSidebarDropDownContent, captionDropDownContent].forEach(
+        (menuEl) => {
+            if (menuEl) {
+                elemDisplay(menuEl, false);
+            }
         }
-    });
+    );
 }
 
 function isEventInsideElements(target, ...elements) {
@@ -9624,7 +9795,9 @@ function handleMsgerDropdownOutsidePress(event) {
             msgerCPDropDownMenuBtn,
             msgerCPDropDownContent,
             msgerSidebarDropDownMenuBtn,
-            msgerSidebarDropDownContent
+            msgerSidebarDropDownContent,
+            captionDropDownMenuBtn,
+            captionDropDownContent
         )
     ) {
         return;
@@ -10150,7 +10323,7 @@ function handleSpeechTranscript(config) {
               ? genGravatar(peer_name)
               : genAvatarSvg(peer_name, 32);
 
-    if (!isCaptionBoxVisible) showCaptionDraggable();
+    if (!isCaptionBoxVisible && transcriptShowOnMsg) showCaptionDraggable();
 
     const msgHTML = `
 	<div class="msg left-msg">
@@ -10504,11 +10677,12 @@ function ensureChatGPTConversationEntry() {
 
     const chatGPTEntry = `
     <div id="${CHAT_GPT_PEER_ID}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${CHAT_GPT_NAME.toLowerCase()}">
-        <button
+        <div
             id="${CHAT_GPT_PEER_ID}_pMsgBtn"
             class="msger-chat-item"
-            type="button"
-            value="${CHAT_GPT_NAME}"
+            role="button"
+            tabindex="0"
+            data-value="${CHAT_GPT_NAME}"
             data-peer-id="${CHAT_GPT_PEER_ID}"
             title="${CHAT_GPT_NAME}"
         >
@@ -10523,7 +10697,7 @@ function ensureChatGPTConversationEntry() {
                 <small>Ask anything</small>
             </span>
             <span id="${CHAT_GPT_PEER_ID}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
-        </button>
+        </div>
     </div>
     `;
 
@@ -10870,21 +11044,21 @@ async function msgerAddPeers(peers) {
 
                 const msgerPrivateDiv = `
                 <div id="${peer_id}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${peer_name.toLowerCase()}">
-                    <button id="${peer_id}_pMsgBtn" class="msger-chat-item" type="button" value="${peer_name}" data-peer-id="${peer_id}" title="${peer_name}">
+                    <div id="${peer_id}_pMsgBtn" class="msger-chat-item" role="button" tabindex="0" data-value="${peer_name}" data-peer-id="${peer_id}" title="${peer_name}">
                         <img id="${peer_id}_pMsgAvatar" class="msger-chat-avatar" src="${chatAvatar}" alt="${peer_name}" />
                         <span class="msger-chat-item-copy">
                             <strong>${peer_name}</strong>
                             <small>Open private conversation</small>
                         </span>
                         <span id="${peer_id}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
-                    </button>
-                    <div id="${peer_id}_pDropdownMenu" class="dropdown-menu-custom msger-participant-dropdown">
-                        <button id="${peer_id}_pDropdownToggle" class="dropdown-toggle" type="button">
-                            <i class="fas fa-ellipsis-vertical"></i>
-                        </button>
-                        <ul id="${peer_id}_pDropdownMenuList" class="dropdown-menu-custom-list app-dropdown-menu msger-participant-dropdown-menu">
-                            ${dropdownOptions}
-                        </ul>
+                        <div id="${peer_id}_pDropdownMenu" class="dropdown-menu-custom msger-participant-dropdown">
+                            <button id="${peer_id}_pDropdownToggle" class="dropdown-toggle" type="button">
+                                <i class="fas fa-ellipsis-vertical"></i>
+                            </button>
+                            <ul id="${peer_id}_pDropdownMenuList" class="dropdown-menu-custom-list app-dropdown-menu msger-participant-dropdown-menu">
+                                ${dropdownOptions}
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 `;
@@ -11014,12 +11188,13 @@ function addMsgerPrivateBtn(
     // Send private message button
     msgerPrivateBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        if (e.target.closest('.dropdown-menu-custom')) return;
         if (msgerPrivateMsgInput) {
             sendPrivateMessage();
             return;
         }
         const selectedPeerId = msgerPrivateBtn.dataset.peerId || peerId;
-        setActiveConversation('private', msgerPrivateBtn.value, selectedPeerId);
+        setActiveConversation('private', msgerPrivateBtn.dataset.value, selectedPeerId);
         msgerDraggable.classList.remove('msger-pinned-sidebar-open');
         if (shouldDockParticipantsPanel()) {
             msgerCPBtn.classList.remove('active');
@@ -11053,16 +11228,16 @@ function addMsgerPrivateBtn(
             return;
         }
         // sanitization to prevent XSS
-        msgerPrivateBtn.value = filterXSS(msgerPrivateBtn.value);
+        msgerPrivateBtn.dataset.value = filterXSS(msgerPrivateBtn.dataset.value);
         myPeerName = filterXSS(myPeerName);
 
-        if (isHtml(myPeerName) && isHtml(msgerPrivateBtn.value)) {
+        if (isHtml(myPeerName) && isHtml(msgerPrivateBtn.dataset.value)) {
             msgerPrivateMsgInput.value = '';
             isChatPasteTxt = false;
             return;
         }
 
-        const toPeerName = msgerPrivateBtn.value;
+        const toPeerName = msgerPrivateBtn.dataset.value;
         emitMsg(myPeerName, myPeerAvatar, toPeerName, pMsg, true, myPeerId);
         appendMessage(myPeerName, rightChatAvatar, 'right', pMsg, true, null, toPeerName);
         msgerPrivateMsgInput.value = '';
@@ -14762,7 +14937,7 @@ function showAbout() {
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.85',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.7.94',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
         html: `
@@ -15792,6 +15967,27 @@ function handleDropdownHover() {
         whiteboardDropDownMenuBtn.addEventListener('mouseleave', hideWhiteboardDropdown);
         whiteboardDropdownMenu.addEventListener('mouseenter', () => clearTimeout(wbTimeoutId));
         whiteboardDropdownMenu.addEventListener('mouseleave', hideWhiteboardDropdown);
+    }
+
+    // Handle Caption dropdown menu hover
+    if (captionDropDownMenuBtn && captionDropDownContent) {
+        let captionTimeoutId;
+
+        const showCaptionDropdown = () => {
+            clearTimeout(captionTimeoutId);
+            elemDisplay(captionDropDownContent, true, 'block');
+        };
+
+        const hideCaptionDropdown = () => {
+            captionTimeoutId = setTimeout(() => {
+                elemDisplay(captionDropDownContent, false);
+            }, 200);
+        };
+
+        captionDropDownMenuBtn.addEventListener('mouseenter', showCaptionDropdown);
+        captionDropDownMenuBtn.addEventListener('mouseleave', hideCaptionDropdown);
+        captionDropDownContent.addEventListener('mouseenter', () => clearTimeout(captionTimeoutId));
+        captionDropDownContent.addEventListener('mouseleave', hideCaptionDropdown);
     }
 }
 

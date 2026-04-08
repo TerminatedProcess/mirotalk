@@ -6,10 +6,7 @@
 
 :root {
     /* common */
-    --navbar-bg: rgba(0, 0, 0, 0.2);
-    --body-bg: radial-gradient(#393939, #000000);
     --border: 0.5px solid rgb(255 255 255 / 18%);
-    --dd-color: #ffffff;
 
     --msger-top: 50%;
     --msger-left: 50%;
@@ -37,14 +34,6 @@
     --btns-hover-scale: scale(1.1);
     --hover-color: grey;
 
-    /* video elem border color */
-    --elem-border-color: none;
-
-    --tab-btn-active: rgb(30 29 29);
-
-    --btn-bar-bg-color: #ffffff;
-    --btn-bar-color: #000000;
-
     /* bottom buttons bar horizontal default */
     --bottom-btns-top: auto;
     --bottom-btns-left: 50%;
@@ -54,27 +43,31 @@
     --bottom-btns-margin-bottom: 18px;
     --bottom-btns-flex-direction: row;
 
-    /* dark theme */
-    --body-bg: radial-gradient(#393939, #000000);
-    --msger-bg: radial-gradient(#393939, #000000);
-    --msger-private-bg: radial-gradient(#393939, #000000);
-    --wb-bg: radial-gradient(#393939, #000000);
-    --select-bg: #2c2c2c;
-    --box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-
-    /* chat msg boble */
-    --left-msg-bg: #252d31;
-    --right-msg-bg: #056162;
-    --private-msg-bg: #6b1226;
+    /* dark theme fallback (default) */
+    --body-bg: radial-gradient(#2a2a2e, #121214);
+    --msger-bg: radial-gradient(#2a2a2e, #121214);
+    --msger-private-bg: radial-gradient(#2a2a2e, #121214);
+    --wb-bg: radial-gradient(#2a2a2e, #121214);
+    --navbar-bg: rgba(18, 18, 20, 0.85);
+    --elem-border-color: 1px solid rgba(255, 255, 255, 0.08);
+    --select-bg: #333338;
+    --tab-btn-active: #3d3d42;
+    --box-shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.5);
+    --left-msg-bg: #2c2c30;
+    --right-msg-bg: #3a3a40;
+    --private-msg-bg: #252528;
+    --btn-bar-bg-color: #e8e8ec;
+    --btn-bar-color: #121214;
+    --btns-bg-color: rgba(18, 18, 20, 0.75);
+    --dd-color: #e8e8ec;
 
     /* volume detected */
     --volume-up: 0px 8px 16px 0px rgb(249, 253, 0);
 
     /* video avatar img size */
     --vmi-wh: 15vw;
-    /* 
-        https://developer.mozilla.org/it/docs/Web/CSS/object-fit 
-    */
+
+    /* https://developer.mozilla.org/it/docs/Web/CSS/object-fit */
     --video-object-fit: cover;
 }
 
@@ -644,7 +637,7 @@ body {
     background: var(--msger-bg);
     border: var(--border);
     resize: none;
-    overflow: hidden;
+    overflow: visible;
     border-radius: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(10px);
@@ -675,6 +668,8 @@ body {
 
 /* Draggable Header */
 .caption-header {
+    position: relative;
+    z-index: 10;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -695,23 +690,25 @@ body {
 }
 
 .caption-header-title button,
-.caption-header-options button {
+.caption-header-options > button,
+.caption-header-options > .dropdown-custom > .dropdown-toggle-custom {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 8px 12px;
-    border: none;
+    border: none !important;
     font-size: 1rem;
     line-height: 1;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1) !important;
     color: #fff;
     border-radius: 8px;
     transition: all 0.25s ease;
 }
 
 .caption-header-title button:hover,
-.caption-header-options button:hover {
-    background: rgba(255, 255, 255, 0.2);
+.caption-header-options > button:hover,
+.caption-header-options > .dropdown-custom > .dropdown-toggle-custom:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
     transform: scale(1.05);
 }
 
@@ -1208,13 +1205,14 @@ body {
 .msger-private-chat-entry {
     display: flex;
     align-items: center;
-    gap: 8px;
     min-width: 0;
     position: relative;
 }
 
 .msger-private-chat-entry .msger-chat-item {
     flex: 1;
+    cursor: pointer;
+    position: relative;
 }
 
 .msger-private-chat-entry .dropdown-menu-custom {
@@ -1228,6 +1226,7 @@ body {
     height: 40px;
     flex-shrink: 0;
     overflow: visible;
+    margin-left: auto;
 }
 
 .msger-private-chat-entry .dropdown-toggle {
@@ -1238,7 +1237,7 @@ body {
     height: 40px;
     padding: 0;
     border-radius: 12px;
-    background: var(--body-bg);
+    background: transparent;
 }
 
 .msger-private-chat-entry .msger-participant-dropdown-menu .app-dropdown-action {
@@ -2510,7 +2509,6 @@ button {
     margin: auto;
     padding: 10px;
     width: 50%;
-    min-height: 560px !important;
     background: var(--body-bg);
     box-shadow: var(--box-shadow);
     border: var(--border);
@@ -2532,7 +2530,6 @@ button {
 @media screen and (max-width: 830px) {
     #mySettings {
         width: 80%;
-        min-height: auto;
     }
     .mySettingsMain {
         flex-direction: row;
@@ -2584,8 +2581,14 @@ button {
 }
 
 #mySettingsHeader {
-    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     cursor: move;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
+    backdrop-filter: blur(10px);
 }
 
 #mySettings i,
@@ -2627,17 +2630,25 @@ button {
 }
 
 #mySettingsCloseBtn {
-    font-size: 1.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     float: right;
-    background: transparent;
-    transition: background 0.23s;
+    background: var(--body-bg);
+    transition: all 0.25s ease;
 }
 
 #mySettingsCloseBtn:hover {
-    background: var(--body-bg);
+    background: var(--right-msg-bg);
+    transform: translateY(-1px);
 }
 
 .form-check-input {
@@ -2657,6 +2668,151 @@ button {
     display: inline-flex;
     text-align: left;
     color: white;
+}
+
+/*--------------------------------------------------------------
+# Settings - theme cards
+--------------------------------------------------------------*/
+
+#mirotalkTheme {
+    display: none !important;
+}
+
+.theme-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.theme-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 4px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition:
+        border-color 0.25s ease,
+        background 0.25s ease,
+        box-shadow 0.25s ease,
+        transform 0.25s ease,
+        opacity 0.25s ease;
+    user-select: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.theme-card i {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.25s ease;
+}
+
+.theme-card span {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: capitalize;
+}
+
+.theme-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.theme-card.active {
+    border-color: var(--dd-color, #66beff);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 12px rgba(102, 190, 255, 0.2);
+}
+
+.theme-card.active i {
+    color: var(--dd-color, #66beff);
+}
+
+.theme-card.active span {
+    color: #ffffff;
+}
+
+.theme-card.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* Theme card specific icon colors */
+.theme-card[data-theme='dark'] i {
+    color: #9a9abb;
+}
+.theme-card[data-theme='grey'] i {
+    color: #b0b0c0;
+}
+.theme-card[data-theme='green'] i {
+    color: #6fcf97;
+}
+.theme-card[data-theme='blue'] i {
+    color: #6ba3d6;
+}
+.theme-card[data-theme='red'] i {
+    color: #e07070;
+}
+.theme-card[data-theme='purple'] i {
+    color: #b07cc8;
+}
+.theme-card[data-theme='orange'] i {
+    color: #e8a560;
+}
+.theme-card[data-theme='yellow'] i {
+    color: #d4b85c;
+}
+
+.theme-card.active[data-theme='dark'] {
+    border-color: #9a9abb;
+    box-shadow: 0 0 12px rgba(154, 154, 187, 0.15);
+}
+.theme-card.active[data-theme='grey'] {
+    border-color: #b0b0c0;
+    box-shadow: 0 0 12px rgba(176, 176, 192, 0.15);
+}
+.theme-card.active[data-theme='green'] {
+    border-color: #6fcf97;
+    box-shadow: 0 0 12px rgba(111, 207, 151, 0.2);
+}
+.theme-card.active[data-theme='blue'] {
+    border-color: #6ba3d6;
+    box-shadow: 0 0 12px rgba(107, 163, 214, 0.2);
+}
+.theme-card.active[data-theme='red'] {
+    border-color: #e07070;
+    box-shadow: 0 0 12px rgba(224, 112, 112, 0.2);
+}
+.theme-card.active[data-theme='purple'] {
+    border-color: #b07cc8;
+    box-shadow: 0 0 12px rgba(176, 124, 200, 0.2);
+}
+.theme-card.active[data-theme='orange'] {
+    border-color: #e8a560;
+    box-shadow: 0 0 12px rgba(232, 165, 96, 0.2);
+}
+.theme-card.active[data-theme='yellow'] {
+    border-color: #d4b85c;
+    box-shadow: 0 0 12px rgba(212, 184, 92, 0.2);
+}
+
+/* Dynamic server-added theme cards: active state handled via inline styles */
+.theme-card.active i {
+    filter: brightness(1.2);
+}
+
+@media screen and (max-width: 500px) {
+    .theme-cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 #themeColorPicker {
@@ -2700,7 +2856,7 @@ button {
     font-size: 0.9rem;
     border: var(--border);
     border-radius: 10px;
-    background: var(--selctt-bg);
+    background: var(--select-bg);
     outline: none;
     cursor: pointer;
     transition: 0.3s;
@@ -2903,9 +3059,8 @@ button {
 --------------------------------------------------------------*/
 
 .tab {
-    padding: 10px 10px 10px 0;
+    padding: 0px 10px 10px 0; /* top right bottom left */
     overflow: hidden;
-    border-radius: 8px;
     width: 35%;
     background-color: var(--body-bg);
     min-height: 480px;
@@ -2916,9 +3071,9 @@ button {
 
 .tabActions {
     position: relative;
-    padding: 10px 15px 0px 0px;
+    padding: 0px 20px 0px 0px; /* top right bottom left */
     width: 65%;
-    max-height: 530px;
+    max-height: 540px;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -2976,7 +3131,6 @@ button {
 /* Style the tab content */
 .tabcontent {
     display: none;
-    margin-top: 15px;
     padding: 6px 12px;
     width: 100%;
     min-height: 480px;
@@ -3817,7 +3971,8 @@ hr {
     }
 }
 
-#msgerDropDownContent .msger-menu-action {
+#msgerDropDownContent .msger-menu-action,
+#captionDropDownContent .msger-menu-action {
     position: relative;
     display: flex;
     align-items: center;
@@ -3831,15 +3986,18 @@ hr {
     line-height: 1.35;
 }
 
-#msgerDropDownContent .msger-menu-action-row {
+#msgerDropDownContent .msger-menu-action-row,
+#captionDropDownContent .msger-menu-action-row {
     padding: 0;
 }
 
-#msgerDropDownContent .msger-menu-action:hover {
+#msgerDropDownContent .msger-menu-action:hover,
+#captionDropDownContent .msger-menu-action:hover {
     background: rgba(255, 255, 255, 0.08);
 }
 
-#msgerDropDownContent .msger-menu-action-icon {
+#msgerDropDownContent .msger-menu-action-icon,
+#captionDropDownContent .msger-menu-action-icon {
     position: absolute;
     left: 12px;
     top: 50%;
@@ -3854,7 +4012,8 @@ hr {
     transform: translateY(-50%);
 }
 
-#msgerDropDownContent .msger-menu-action i {
+#msgerDropDownContent .msger-menu-action i,
+#captionDropDownContent .msger-menu-action i {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3865,7 +4024,8 @@ hr {
     color: rgba(232, 247, 249, 0.92);
 }
 
-#msgerDropDownContent .msger-menu-action-label {
+#msgerDropDownContent .msger-menu-action-label,
+#captionDropDownContent .msger-menu-action-label {
     display: inline-flex;
     align-items: center;
     width: 100%;
@@ -3875,64 +4035,93 @@ hr {
     line-height: 1.25;
 }
 
-#msgerDropDownContent .msger-menu-action-danger {
+#msgerDropDownContent .msger-menu-action-danger,
+#captionDropDownContent .msger-menu-action-danger {
     color: #ffd3cf;
 }
 
-#msgerDropDownContent .msger-menu-action-danger .msger-menu-action-icon {
+#msgerDropDownContent .msger-menu-action-danger .msger-menu-action-icon,
+#captionDropDownContent .msger-menu-action-danger .msger-menu-action-icon {
     background: rgba(255, 95, 87, 0.12);
 }
 
-#msgerDropDownContent .msger-menu-action-danger i {
+#msgerDropDownContent .msger-menu-action-danger i,
+#captionDropDownContent .msger-menu-action-danger i {
     color: #ff8c84;
 }
 
-#msgerDropDownContent .msger-menu-action-danger:hover {
+#msgerDropDownContent .msger-menu-action-danger:hover,
+#captionDropDownContent .msger-menu-action-danger:hover {
     background: rgba(255, 95, 87, 0.1);
 }
 
-#msgerDropDownContent .msger-menu-toggle-row {
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+/*--------------------------------------------------------------
+# Transcription/Chat switch rows (dropdown menu)
+--------------------------------------------------------------*/
+
+.transcription-switch-row {
+    display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
     padding: 10px 12px;
     color: #ffffff;
+    gap: 10px;
 }
 
-#msgerDropDownContent .msger-menu-toggle-icon {
+.transcription-switch-row i {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    min-width: 18px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 0.86rem;
+    line-height: 1;
     color: rgba(232, 247, 249, 0.92);
 }
 
-#msgerDropDownContent .msger-menu-toggle-copy {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-}
-
-#msgerDropDownContent .msger-menu-toggle-copy strong {
-    display: block;
-    font-size: 0.9rem;
+.transcription-switch-label {
+    flex: 1;
+    font-size: 0.88rem;
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.25;
     color: #ffffff;
 }
 
-#msgerDropDownContent .msger-menu-toggle-copy small {
-    display: block;
-    font-size: 0.76rem;
-    line-height: 1.3;
-    color: rgba(214, 234, 238, 0.7);
+#captionDropDownContent {
+    padding: 14px 10px 10px;
 }
 
-#msgerDropDownContent .msger-menu-toggle-row .switch {
-    margin-left: 8px;
+#captionDropDownContent > li {
+    padding: 0;
+}
+
+#captionDropDownContent hr {
+    margin: 6px 6px;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#captionDropDownContent .msger-menu-action-row + .msger-menu-action-row {
+    margin-top: 4px;
+}
+
+.caption-header-options .dropdown-custom {
+    position: relative;
+    z-index: 10;
+}
+
+.caption-header-options .dropdown-custom > .dropdown-menu-custom {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    left: auto;
+    z-index: 9999;
+    width: min(240px, calc(100vw - 32px));
+    min-width: min(240px, calc(100vw - 32px));
+    max-width: min(240px, calc(100vw - 32px));
 }
 
 /* Styles for table cell with title (td) */
