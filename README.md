@@ -24,13 +24,7 @@
 <p align="center"><strong>MiroTalk P2P</strong> is a <strong>self-hosted, open-source video conferencing</strong> platform using direct <strong>peer-to-peer WebRTC connections</strong> for fast, secure, real-time communication. Deploy on your own server in minutes. Enjoy unlimited rooms, no time limits, end-to-end privacy, and a rich feature set - all under your control.</p>
 
 <p align="center">
-    <a href="https://p2p.mirotalk.com"><img src="https://img.shields.io/badge/Try_Live_Demo-blue?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Try Live Demo"></a>
-    &nbsp;
-    <a href="https://docs.mirotalk.com/mirotalk-p2p/self-hosting/"><img src="https://img.shields.io/badge/Documentation-green?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
-    &nbsp;
-    <a href="https://discord.gg/rgGYfeYW3N"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-    &nbsp;
-    <a href="https://github.com/sponsors/miroslavpejic85"><img src="https://img.shields.io/badge/Sponsor-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
+    <a href="https://p2p.mirotalk.com">Try Live Demo</a> · <a href="https://p2p.mirotalk.com/privacy">Privacy</a> · <a href="https://docs.mirotalk.com/mirotalk-p2p/self-hosting/">Documentation</a> · <a href="https://discord.gg/rgGYfeYW3N">Discord</a> · <a href="https://github.com/sponsors/miroslavpejic85">Sponsor</a>
 </p>
 
 <br />
@@ -43,10 +37,8 @@
 
 <p align="center">Proudly sponsored by</p>
 
-<h1 align=center>Recall.ai - API for meeting recording</h1>
-<p align="center">
-    <a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=miroslavpejic85-mirotalk"><strong>Recall.ai</strong></a> – an API for recording Zoom, Google Meet, Microsoft Teams, and in-person meetings.
-</p>
+<h1 align=center><a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=miroslavpejic85-mirotalk">Recall.ai</a> - API for meeting recording</h1>
+<p align="center">An API for recording Zoom, Google Meet, Microsoft Teams, and in-person meetings.</p>
 
 <hr />
 
@@ -273,19 +265,15 @@ Enhance your video conferencing with **advanced virtual backgrounds** and **nois
 
 ---
 
-🌐 **Explore all MiroTalk projects:** [MiroTalk Overview →](https://docs.mirotalk.com/overview/)
-
----
-
 This project is tested with [BrowserStack](https://www.browserstack.com).
 
 ---
 
-## Star History
+🌐 **Explore all MiroTalk projects:**
+
+**[ → MiroTalk Overview](https://docs.mirotalk.com/overview/)**
 
 ![Star History Chart](https://app.repohistory.com/api/svg?repo=miroslavpejic85/mirotalk&type=Date&background=0D1117&color=62C3F8)
-
----
 
 <p align="center">
   Built with ❤️ by <a href="https://www.linkedin.com/in/miroslav-pejic-976a07101/">Miroslav</a> and the open-source community
