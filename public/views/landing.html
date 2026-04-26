@@ -554,7 +554,7 @@
 
                 <section id="sponsors" class="clients section">
                     <div class="container">
-                        <h2 class="mt-24 tac">Current sponsors</h2>
+                        <h2 class="mt-24 tac">Current Sponsors</h2>
                         <div class="clients-inner section-inner has-animations has-top-divider has-bottom-divider">
                             <ul class="list-reset">
                                 <li class="reveal-from-top" data-reveal-delay="150">
@@ -633,8 +633,23 @@
 
                 <section id="pastSponsors" class="clients section">
                     <div class="container">
-                        <h2 class="mt-24 tac">Past sponsors</h2>
-                        <div class="clients-inner section-inner has-animations has-top-divider has-bottom-divider">
+                        <div class="past-sponsors-header tac mt-24 mb-24">
+                            <button
+                                id="pastSponsorsToggle"
+                                class="past-sponsors-toggle"
+                                type="button"
+                                aria-controls="pastSponsorsContent"
+                                aria-expanded="false"
+                            >
+                                <span class="past-sponsors-toggle-label">Previous Sponsors</span>
+                                <span class="past-sponsors-toggle-hint">Click or tap to view</span>
+                                <i class="fa-solid fa-chevron-down past-sponsors-toggle-icon" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div
+                            id="pastSponsorsContent"
+                            class="clients-inner section-inner has-animations has-top-divider has-bottom-divider"
+                        >
                             <ul class="list-reset">
                                 <li class="reveal-from-top" data-reveal-delay="150">
                                     <div class="clients-logo">
@@ -677,7 +692,7 @@
 
                 <section id="advertisers" class="clients section">
                     <div class="container">
-                        <h2 class="mt-24 tac">Our advertisers</h2>
+                        <h2 class="mt-24 tac">Our Advertisers</h2>
                         <div class="clients-inner section-inner has-animations has-top-divider has-bottom-divider">
                             <ul class="list-reset">
                                 <li class="reveal-from-top" data-reveal-delay="150">
@@ -873,6 +888,21 @@
                                                 <title>Facebook</title>
                                                 <path
                                                     d="M6.023 16L6 9H3V6h3V4c0-2.7 1.672-4 4.08-4 1.153 0 2.144.086 2.433.124v2.821h-1.67c-1.31 0-1.563.623-1.563 1.536V6H13l-1 3H9.28v7H6.023z"
+                                                />
+                                            </svg>
+                                        </a>
+                                    </li>
+                                    <li class="footer-social-icon">
+                                        <a target="_blank" href="https://www.linkedin.com/company/mirotalk">
+                                            <svg
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 16 16"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                <title>LinkedIn</title>
+                                                <path
+                                                    d="M1.146 0C.513 0 0 .526 0 1.175v13.65C0 15.487.513 16 1.146 16h13.708c.633 0 1.146-.513 1.146-1.175V1.175C16 .526 15.487 0 14.854 0H1.146ZM4.75 13.5H2.5V6.25h2.25V13.5ZM3.625 5.25a1.313 1.313 0 1 1 0-2.625 1.313 1.313 0 0 1 0 2.625Zm9.875 8.25h-2.25V9.969c0-.922-.016-2.11-1.286-2.11-1.288 0-1.485 1.005-1.485 2.044V13.5h-2.25V6.25h2.16v.991h.03c.3-.57 1.036-1.171 2.133-1.171 2.281 0 2.703 1.502 2.703 3.455V13.5Z"
                                                 />
                                             </svg>
                                         </a>

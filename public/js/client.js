@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.8.03
+ * @version 1.8.13
  *
  */
 
@@ -630,6 +630,8 @@ let myPrivacyBtn;
 let myVideoPinBtn;
 let myScreenPinBtn;
 let myPitchBar;
+let myVolumeTimer = null;
+const peerVolumeTimers = {};
 let myVideoPeerName;
 let myScreenPeerName;
 let myHandStatusIcon;
@@ -666,6 +668,7 @@ let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let transcripts = []; // collect all the transcripts to save it later if you need
 let chatMessages = []; // collect chat messages to save it later if want
 let chatGPTcontext = []; // keep chatGPT messages context
+const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 const CHAT_GPT_PEER_ID = 'chatgpt';
 const CHAT_GPT_NAME = 'ChatGPT';
 let activeConversation = {
@@ -2576,6 +2579,9 @@ async function whoAreYouJoin() {
     if (isScreenStreaming && useVideo) {
         await changeLocalCamera(videoSelect.value);
     }
+    if (useAudio && localAudioMediaStream) {
+        getMicrophoneVolumeIndicator(localAudioMediaStream);
+    }
 }
 
 /**
@@ -2907,6 +2913,9 @@ async function handleRTCDataChannels(peer_id) {
                         switch (dataMessage.type) {
                             case 'chat':
                                 handleDataChannelChat(dataMessage);
+                                break;
+                            case 'chatReaction':
+                                handleDataChannelChatReaction(dataMessage);
                                 break;
                             case 'speech':
                                 handleDataChannelSpeechTranscript(dataMessage);
@@ -10224,15 +10233,17 @@ async function sendChatMessage() {
         return cleanMessageInput();
     }
 
+    const msgId = createChatMessageId();
+
     if (activeConversation.type === 'private' && activeConversation.peerId === CHAT_GPT_PEER_ID) {
-        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, null, CHAT_GPT_NAME);
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, msgId, CHAT_GPT_NAME);
         await getChatGPTmessage(msg);
     } else if (activeConversation.type === 'private' && activeConversation.peerName) {
-        emitMsg(myPeerName, myPeerAvatar, activeConversation.peerName, msg, true, myPeerId);
-        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, null, activeConversation.peerName);
+        emitMsg(myPeerName, myPeerAvatar, activeConversation.peerName, msg, true, myPeerId, msgId);
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, true, msgId, activeConversation.peerName);
     } else {
-        emitMsg(myPeerName, myPeerAvatar, 'toAll', msg, false, myPeerId);
-        appendMessage(myPeerName, rightChatAvatar, 'right', msg, false);
+        emitMsg(myPeerName, myPeerAvatar, 'toAll', msg, false, myPeerId, msgId);
+        appendMessage(myPeerName, rightChatAvatar, 'right', msg, false, msgId);
     }
     cleanMessageInput();
 }
@@ -10251,7 +10262,7 @@ function handleDataChannelChat(dataMessage) {
     const msgTo = filterXSS(dataMessage.to);
     const msg = filterXSS(dataMessage.msg);
     const msgPrivate = filterXSS(dataMessage.privateMsg);
-    const msgId = filterXSS(dataMessage.id);
+    const msgId = filterXSS(dataMessage.msg_id || '');
 
     // We check if the message is from real peer
     const from_peer_name = allPeers[msgFromId]['peer_name'];
@@ -10303,6 +10314,218 @@ function handleDataChannelChat(dataMessage) {
 function cleanMessageInput() {
     msgerInput.value = '';
     checkLineBreaks();
+}
+
+/**
+ * Create a unique message id used by chat reactions.
+ * @returns {string}
+ */
+function createChatMessageId() {
+    return `m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Ensure a safe, non-empty message id.
+ * @param {string|null} msgId
+ * @returns {string}
+ */
+function normalizeChatMessageId(msgId) {
+    const raw = String(msgId || '').trim();
+    const safe = raw.replace(/[^a-zA-Z0-9:_-]/g, '');
+    return safe || createChatMessageId();
+}
+
+/**
+ * Find rendered chat message element by message id.
+ * @param {string} msgId
+ * @returns {HTMLElement|null}
+ */
+function getChatMessageElement(msgId) {
+    const normalizedId = normalizeChatMessageId(msgId);
+    return msgerChat?.querySelector(`.msg[data-msg-id="${normalizedId}"]`) || null;
+}
+
+/**
+ * Toggle emoji reaction picker for a message bubble.
+ * @param {string} msgId
+ * @param {HTMLElement|null} triggerElement
+ */
+function toggleReactionPicker(msgId, triggerElement = null) {
+    const messageElement = getChatMessageElement(msgId);
+    if (!messageElement) return;
+
+    const footer = messageElement.querySelector('.msg-footer');
+    if (!footer) return;
+
+    const existingPicker = footer.querySelector('.reaction-picker');
+    if (existingPicker) {
+        existingPicker.remove();
+        triggerElement?.blur();
+        return;
+    }
+
+    // Close any other open pickers
+    msgerChat.querySelectorAll('.reaction-picker').forEach((picker) => picker.remove());
+
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.setAttribute('role', 'group');
+    picker.setAttribute('aria-label', 'Reaction emoji picker');
+
+    const buttons = [];
+
+    CHAT_REACTION_EMOJIS.forEach((emoji, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'reaction-emoji-btn';
+        button.textContent = emoji;
+        button.setAttribute('data-emoji', emoji);
+        button.setAttribute('aria-label', `React with ${emoji}`);
+        button.onclick = (e) => sendChatReaction(msgId, emoji, e);
+
+        button.onkeydown = (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                buttons[(index + 1) % buttons.length]?.focus();
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                buttons[(index - 1 + buttons.length) % buttons.length]?.focus();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                picker.remove();
+                triggerElement?.focus();
+            }
+        };
+
+        buttons.push(button);
+        picker.appendChild(button);
+    });
+
+    footer.appendChild(picker);
+
+    // Focus first button
+    setTimeout(() => picker.querySelector('.reaction-emoji-btn')?.focus(), 0);
+}
+
+/**
+ * Send reaction to peers and update local bubble.
+ * @param {string} msgId
+ * @param {string} emoji
+ * @param {Event} event
+ */
+function sendChatReaction(msgId, emoji, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const normalizedMsgId = normalizeChatMessageId(msgId);
+    if (!normalizedMsgId || !emoji) return;
+
+    const messageElement = getChatMessageElement(normalizedMsgId);
+    if (!messageElement) return;
+
+    const currentBadge = messageElement.querySelector(`.reaction-badge[data-emoji="${emoji}"]`);
+    const currentPeers = currentBadge?.dataset.peers
+        ? currentBadge.dataset.peers
+              .split(',')
+              .map((peer) => peer.trim())
+              .filter(Boolean)
+        : [];
+    const action = currentPeers.includes(myPeerName) ? 'remove' : 'add';
+
+    applyReactionToElement(messageElement, emoji, myPeerName, action);
+
+    sendToDataChannel({
+        type: 'chatReaction',
+        msg_id: normalizedMsgId,
+        emoji: emoji,
+        peer_name: myPeerName,
+        fromId: myPeerId,
+        action: action,
+    });
+
+    msgerChat.querySelectorAll('.reaction-picker').forEach((picker) => picker.remove());
+}
+
+/**
+ * Handle incoming data channel chat reactions.
+ * @param {object} dataMessage
+ */
+function handleDataChannelChatReaction(dataMessage) {
+    if (!dataMessage) return;
+
+    const fromId = filterXSS(dataMessage.fromId || '');
+    const peerName = filterXSS(dataMessage.peer_name || '');
+
+    if (fromId && allPeers[fromId]?.peer_name && allPeers[fromId].peer_name !== peerName) {
+        console.log('Fake reaction detected', {
+            realFrom: allPeers[fromId].peer_name,
+            fakeFrom: peerName,
+            msgId: dataMessage.msg_id,
+            emoji: dataMessage.emoji,
+        });
+        return;
+    }
+
+    handleChatReaction(dataMessage);
+}
+
+/**
+ * Apply reaction updates to a message element with smart badge display.
+ * @param {HTMLElement} messageElement
+ * @param {string} emoji
+ * @param {string} peerName
+ * @param {string} action
+ */
+function applyReactionToElement(messageElement, emoji, peerName, action = 'add') {
+    if (!messageElement || !emoji || !peerName) return;
+
+    const footer = messageElement.querySelector('.msg-footer');
+    if (!footer) return;
+
+    let reactionsContainer = footer.querySelector('.message-reactions');
+    if (!reactionsContainer && action === 'add') {
+        reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+        footer.appendChild(reactionsContainer);
+    }
+
+    if (!reactionsContainer) return;
+
+    let badge = reactionsContainer.querySelector(`.reaction-badge[data-emoji="${emoji}"]`);
+    let peers = badge?.dataset.peers
+        ? badge.dataset.peers
+              .split(',')
+              .map((peer) => peer.trim())
+              .filter(Boolean)
+        : [];
+
+    if (action === 'remove') {
+        peers = peers.filter((peer) => peer !== peerName);
+    } else if (!peers.includes(peerName)) {
+        peers.push(peerName);
+    }
+
+    if (peers.length === 0) {
+        if (badge) badge.remove();
+        if (!reactionsContainer.querySelector('.reaction-badge')) reactionsContainer.remove();
+        return;
+    }
+
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'reaction-badge';
+        badge.dataset.emoji = emoji;
+        const msgId = messageElement.dataset.msgId || '';
+        badge.dataset.msgId = msgId;
+        badge.onclick = (event) => sendChatReaction(msgId, emoji, event);
+        reactionsContainer.appendChild(badge);
+    }
+
+    badge.dataset.peers = peers.join(', ');
+    badge.textContent = `${emoji} ${peers.length}`;
+    badge.classList.toggle('my-reaction', peers.includes(myPeerName));
 }
 
 /**
@@ -10413,6 +10636,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     const getImg = getFrom === CHAT_GPT_NAME && getSide === 'left' ? images.chatgpt : filterXSS(img);
     const getMsg = filterXSS(msg);
     const getPrivateMsg = filterXSS(privateMsg);
+    const normalizedMsgId = normalizeChatMessageId(msgId);
 
     // collect chat messages to save it later
     const conversationPeer = getPrivateMsg ? (getSide === 'left' ? getFrom : getTo) : '';
@@ -10431,7 +10655,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     let msgHTML = `
 	<div id="msg-${chatMessagesId}" class="msg ${getSide}-msg" data-sender="${getFrom}" data-chat-type="${
         getPrivateMsg ? 'private' : 'public'
-    }" data-chat-peer="${conversationPeer}">
+    }" data-chat-peer="${conversationPeer}" data-msg-id="${normalizedMsgId}">
         <img class="msg-img" src="${getImg}" />
 		<div class=${msgBubble}>
             <div class="msg-info">
@@ -10441,6 +10665,8 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
             <div class="msg-text">
             <span id="message-${chatMessagesId}"></span>
                 <hr/>
+                <div class="msg-footer">
+                    <div class="msg-actions">
     `;
     msgHTML += `
                 <button
@@ -10455,6 +10681,13 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                     style="color:#fff; border:none; background:transparent;"
                     onclick="copyToClipboard('message-${chatMessagesId}')"
                 ></button>`;
+    msgHTML += `
+                <button
+                    id="msg-reaction-${chatMessagesId}"
+                    class="reaction-toggle-btn"
+                    style="color:#fff; border:none; background:transparent;"
+                    onclick="toggleReactionPicker('${normalizedMsgId}', this)"
+                >😊</button>`;
     if (isSpeechSynthesisSupported) {
         msgHTML += `
                 <button
@@ -10465,6 +10698,9 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                 ></button>`;
     }
     msgHTML += ` 
+                    </div>
+                    <div class="message-reactions"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -10490,6 +10726,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     if (!isMobileDevice) {
         setTippy(getId('msg-delete-' + chatMessagesId), 'Delete', 'top');
         setTippy(getId('msg-copy-' + chatMessagesId), 'Copy', 'top');
+        setTippy(getId('msg-reaction-' + chatMessagesId), 'React', 'top');
         setTippy(getId('msg-speech-' + chatMessagesId), 'Speech', 'top');
     }
     chatMessagesId++;
@@ -11267,8 +11504,9 @@ function addMsgerPrivateBtn(
         }
 
         const toPeerName = msgerPrivateBtn.dataset.value;
-        emitMsg(myPeerName, myPeerAvatar, toPeerName, pMsg, true, myPeerId);
-        appendMessage(myPeerName, rightChatAvatar, 'right', pMsg, true, null, toPeerName);
+        const msgId = createChatMessageId();
+        emitMsg(myPeerName, myPeerAvatar, toPeerName, pMsg, true, myPeerId, msgId);
+        appendMessage(myPeerName, rightChatAvatar, 'right', pMsg, true, msgId, toPeerName);
         msgerPrivateMsgInput.value = '';
         if (!shouldDockParticipantsPanel()) {
             syncParticipantsPanelVisibility(false);
@@ -11532,7 +11770,7 @@ function getFormatDate(date) {
  * @param {boolean} privateMsg if is a private message
  * @param {string} id peer_id
  */
-function emitMsg(from, fromAvatar, to, msg, privateMsg, id) {
+function emitMsg(from, fromAvatar, to, msg, privateMsg, id, msgId = '') {
     if (!msg) return;
 
     // sanitize all params
@@ -11543,6 +11781,7 @@ function emitMsg(from, fromAvatar, to, msg, privateMsg, id) {
     const getMsg = filterXSS(msg);
     const getPrivateMsg = filterXSS(privateMsg);
     const getId = filterXSS(id);
+    const getMsgId = normalizeChatMessageId(filterXSS(msgId));
 
     const chatMessage = {
         type: 'chat',
@@ -11550,6 +11789,7 @@ function emitMsg(from, fromAvatar, to, msg, privateMsg, id) {
         fromAvatar: getFromAvatar,
         fromId: getFromId,
         id: getId,
+        msg_id: getMsgId,
         to: getTo,
         msg: getMsg,
         privateMsg: getPrivateMsg,
@@ -11559,12 +11799,46 @@ function emitMsg(from, fromAvatar, to, msg, privateMsg, id) {
 }
 
 /**
+ * Show AI typing indicator animation in the chat
+ * @param {string} aiName
+ */
+function showAITypingIndicator(aiName) {
+    const existing = getId(`ai-typing-${aiName}`);
+    if (existing) return;
+    const typingHTML = `
+        <div id="ai-typing-${aiName}" class="msg left-msg">
+            <div class="ai-typing-indicator">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    `;
+    msgerChat.insertAdjacentHTML('beforeend', typingHTML);
+    msgerChat.scrollTop = msgerChat.scrollHeight;
+}
+
+/**
+ * Hide AI typing indicator animation from the chat
+ * @param {string} aiName
+ */
+function hideAITypingIndicator(aiName) {
+    const indicator = getId(`ai-typing-${aiName}`);
+    if (indicator) indicator.remove();
+}
+
+/**
  * Read ChatGPT incoming message
  * https://platform.openai.com/docs/introduction
  * @param {string} msg
  */
 async function getChatGPTmessage(msg) {
     console.log('Send ChatGPT message:', msg);
+
+    showAITypingIndicator('ChatGPT');
+
     signalingSocket
         .request('data', {
             room_id: roomId,
@@ -11579,6 +11853,7 @@ async function getChatGPTmessage(msg) {
         })
         .then(
             function (completion) {
+                hideAITypingIndicator('ChatGPT');
                 if (!completion) return;
                 const { message, context } = completion;
                 chatGPTcontext = context ? context : [];
@@ -11590,6 +11865,7 @@ async function getChatGPTmessage(msg) {
             }.bind(this)
         )
         .catch((err) => {
+            hideAITypingIndicator('ChatGPT');
             console.log('ChatGPT error:', err);
         });
 }
@@ -12315,6 +12591,34 @@ function handleMessage(message) {
             break;
     }
 }
+
+/**
+ * Handle incoming chat reactions.
+ * @param {object} data
+ */
+function handleChatReaction(data) {
+    if (!data) return;
+
+    const rawMsgId = String(data.msg_id || '').trim();
+    const msgId = rawMsgId.replace(/[^a-zA-Z0-9:_-]/g, '');
+    const emoji = filterXSS(data.emoji || '');
+    const peerName = filterXSS(data.peer_name || '');
+    const action = data.action === 'remove' ? 'remove' : 'add';
+
+    if (!msgId || !emoji || !peerName) return;
+    if (!CHAT_REACTION_EMOJIS.includes(emoji)) return;
+
+    const messageElement = getChatMessageElement(msgId);
+    if (!messageElement) return;
+
+    applyReactionToElement(messageElement, emoji, peerName, action);
+}
+
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (target?.closest('.reaction-picker') || target?.closest('.reaction-toggle-btn')) return;
+    msgerChat?.querySelectorAll('.reaction-picker').forEach((picker) => picker.remove());
+});
 
 /**
  * Handle room emoji reaction
@@ -14966,7 +15270,7 @@ function showAbout() {
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.03',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.13',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
         html: `
@@ -15158,15 +15462,26 @@ function bytesToSize(bytes) {
 }
 
 /**
+ * Map volume level to a display color
+ * @param {number} volume 0-100
+ * @returns {string} hex color
+ */
+function getVolumeColor(volume) {
+    if (volume >= 80) return '#FF0000'; // Red
+    if (volume >= 50) return '#FFA500'; // Orange
+    return '#19bb5c'; // Green
+}
+
+/**
  * Handle peer audio volume
  * @param {object} data peer audio
  */
 function handlePeerVolume(data) {
     const { peer_id, volume } = data;
 
-    let audioColorTmp = '#19bb5c';
-    if ([50, 60, 70].includes(volume)) audioColorTmp = '#FFA500'; // Orange
-    if ([80, 90, 100].includes(volume)) audioColorTmp = '#FF0000'; // Red
+    if (volume === 0) return;
+
+    const audioColorTmp = getVolumeColor(volume);
 
     if (!isAudioPitchBar) {
         const remotePeerAvatarImg = getId(peer_id + '_avatar');
@@ -15186,7 +15501,8 @@ function handlePeerVolume(data) {
     remotePitchBar.style.backgroundColor = audioColorTmp;
     remotePitchBar.style.height = volume + '%';
     //remoteVideoWrap.classList.toggle('speaking');
-    setTimeout(function () {
+    clearTimeout(peerVolumeTimers[peer_id]);
+    peerVolumeTimers[peer_id] = setTimeout(function () {
         remotePitchBar.style.backgroundColor = '#19bb5c';
         remotePitchBar.style.height = '0%';
         //remoteVideoWrap.classList.toggle('speaking');
@@ -15200,9 +15516,9 @@ function handlePeerVolume(data) {
 function handleMyVolume(data) {
     const { volume } = data;
 
-    let audioColorTmp = '#19bb5c';
-    if ([50, 60, 70].includes(volume)) audioColorTmp = '#FFA500'; // Orange
-    if ([80, 90, 100].includes(volume)) audioColorTmp = '#FF0000'; // Red
+    if (volume === 0) return;
+
+    const audioColorTmp = getVolumeColor(volume);
 
     if (!isAudioPitchBar || !myPitchBar) {
         const localPeerAvatarImg = getId('myVideoAvatarImage');
@@ -15217,7 +15533,8 @@ function handleMyVolume(data) {
     myPitchBar.style.backgroundColor = audioColorTmp;
     myPitchBar.style.height = volume + '%';
     //myVideoWrap.classList.toggle('speaking');
-    setTimeout(function () {
+    clearTimeout(myVolumeTimer);
+    myVolumeTimer = setTimeout(function () {
         myPitchBar.style.backgroundColor = '#19bb5c';
         myPitchBar.style.height = '0%';
         //myVideoWrap.classList.toggle('speaking');
