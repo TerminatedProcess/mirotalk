@@ -45,7 +45,7 @@ dependencies: {
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.8.13
+ * @version 1.8.34
  *
  */
 
@@ -1616,17 +1616,19 @@ io.sockets.on('connect', async (socket) => {
         let peer_id_to_update = null;
 
         for (let peer_id in peers[room_id]) {
-            if (peers[room_id][peer_id]['peer_name'] == peer_name_old && peer_id == socket.id) {
+            if (peer_id == socket.id) {
                 peers[room_id][peer_id]['peer_name'] = peer_name_new;
+                peers[room_id][peer_id]['peer_avatar'] = peer_avatar;
                 // presenter
                 if (presenters && presenters[room_id] && presenters[room_id][peer_id]) {
                     presenters[room_id][peer_id]['peer_name'] = peer_name_new;
                 }
                 peer_id_to_update = peer_id;
-                log.debug('[' + socket.id + '] Peer name changed', {
+                log.debug('[' + socket.id + '] Peer profile changed', {
                     peer_name_old: peer_name_old,
                     peer_name_new: peer_name_new,
                 });
+                break;
             }
         }
 

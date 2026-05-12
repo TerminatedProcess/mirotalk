@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.8.13
+ * @version 1.8.34
  *
  */
 
@@ -107,6 +107,12 @@ const icons = {
     codecs: '<i class="fa-solid fa-film"></i>',
     theme: '<i class="fas fa-fill-drip"></i>',
     close: '<i class="fas fa-times"></i>',
+    infoBrowser: '<i class="fa-solid fa-globe"></i>',
+    infoCpu: '<i class="fa-solid fa-microchip"></i>',
+    infoDevice: '<i class="fa-solid fa-laptop"></i>',
+    infoEngine: '<i class="fa-solid fa-gear"></i>',
+    infoOs: '<i class="fa-solid fa-layer-group"></i>',
+    infoDefault: '<i class="fa-solid fa-circle-info"></i>',
 };
 
 // Whiteboard and fileSharing
@@ -303,6 +309,17 @@ const chatInputEmoji = {
     ':J': '🥴',
 }; // https://github.com/wooorm/gemoji/blob/main/support.md
 
+const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const CHAT_GPT_PEER_ID = 'chatgpt';
+const CHAT_GPT_NAME = 'ChatGPT';
+
+const roomEmojiBurstState = {
+    startedAt: 0,
+    anchorX: 0,
+    anchorY: 0,
+    count: 0,
+};
+
 // Chat room emoji picker
 const msgerEmojiPicker = getId('msgerEmojiPicker');
 
@@ -360,6 +377,8 @@ const tabLanguagesBtn = getId('tabLanguagesBtn');
 const mySettingsCloseBtn = getId('mySettingsCloseBtn');
 const myPeerNameSet = getId('myPeerNameSet');
 const myPeerNameSetBtn = getId('myPeerNameSetBtn');
+const myProfileAvatarUploadBtn = getId('myProfileAvatarUploadBtn');
+const myProfileAvatarResetBtn = getId('myProfileAvatarResetBtn');
 const switchSounds = getId('switchSounds');
 const switchShare = getId('switchShare');
 const switchKeepButtonsVisible = getId('switchKeepButtonsVisible');
@@ -459,7 +478,7 @@ const unlockRoomBtn = getId('unlockRoomBtn');
 
 // File send progress
 const sendFileDiv = getId('sendFileDiv');
-const imgShareSend = getId('imgShareSend');
+const sendFileDragHandle = getId('sendFileDragHandle');
 const sendFilePercentage = getId('sendFilePercentage');
 const sendFileInfo = getId('sendFileInfo');
 const sendProgress = getId('sendProgress');
@@ -467,7 +486,7 @@ const sendAbortBtn = getId('sendAbortBtn');
 
 // File receive progress
 const receiveFileDiv = getId('receiveFileDiv');
-const imgShareReceive = getId('imgShareReceive');
+const receiveFileDragHandle = getId('receiveFileDragHandle');
 const receiveFilePercentage = getId('receiveFilePercentage');
 const receiveFileInfo = getId('receiveFileInfo');
 const receiveProgress = getId('receiveProgress');
@@ -491,6 +510,14 @@ const speechRecognitionStop = getId('speechRecognitionStop');
 
 // Media
 const sinkId = 'sinkId' in HTMLMediaElement.prototype;
+
+// Disconnect banner
+const banner = getId('disconnectBanner');
+const icon = getId('disconnectBannerIcon');
+const title = getId('disconnectBannerTitle');
+const msg = getId('disconnectBannerMsg');
+const spinner = getId('disconnectBannerSpinner');
+let disconnectBannerRafId = null;
 
 //....
 
@@ -563,6 +590,7 @@ let thisMaxRoomParticipants = 8;
 let swBg = 'rgba(0, 0, 0, 0.7)'; // swAlert background color
 let isDocumentOnFullScreen = false;
 let isToggleExtraBtnClicked = false;
+let hasTemporaryAvatar = !!(lsSettings.peer_avatar && isValidAvatarURL(lsSettings.peer_avatar));
 
 // peer
 let myPeerId; // This socket.id
@@ -597,6 +625,7 @@ let peerConnections = {}; // keep track of our peer connections, indexed by peer
 let chatDataChannels = {}; // keep track of our peer chat data channels
 let fileDataChannels = {}; // keep track of our peer file sharing data channels
 let allPeers = {}; // keep track of all peers in the room, indexed by peer_id == socket.io id
+let pendingIceCandidates = {}; // keep track of pending ICE candidates before the peer connection is ready, indexed by peer_id == socket.io id
 
 let lastStats = null;
 
@@ -658,6 +687,7 @@ let isChatPinned = false;
 let isCaptionPinned = false;
 let isChatRoomVisible = false;
 let isParticipantsVisible = false;
+let isChatOpenedByParticipantsBtn = false;
 let isCaptionBoxVisible = false;
 let isChatEmojiVisible = false;
 let isChatMarkdownOn = false;
@@ -668,9 +698,7 @@ let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let transcripts = []; // collect all the transcripts to save it later if you need
 let chatMessages = []; // collect chat messages to save it later if want
 let chatGPTcontext = []; // keep chatGPT messages context
-const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
-const CHAT_GPT_PEER_ID = 'chatgpt';
-const CHAT_GPT_NAME = 'ChatGPT';
+
 let activeConversation = {
     type: 'public',
     peerName: '',
@@ -895,10 +923,6 @@ function setButtonsToolTip() {
     setTippy(whiteboardEraserBtn, 'Eraser mode', 'bottom');
     setTippy(whiteboardUndoBtn, 'Undo', 'bottom');
     setTippy(whiteboardRedoBtn, 'Redo', 'bottom');
-    // Suspend/Hide File transfer buttons
-    setTippy(sendAbortBtn, 'Abort file transfer', 'bottom');
-    setTippy(receiveAbortBtn, 'Abort file transfer', 'bottom');
-    setTippy(receiveHideBtn, 'Hide file transfer', 'bottom');
     // Video/audio URL player
     setTippy(videoUrlCloseBtn, 'Close the video player', 'bottom');
     setTippy(videoAudioCloseBtn, 'Close the video player', 'bottom');
@@ -1000,10 +1024,41 @@ function getInfo() {
             os: filterUnknown(parserResult.os),
         };
 
-        // Convert the filtered result to a readable JSON string
-        const resultString = JSON.stringify(filteredResult, null, 2);
+        const sectionMeta = {
+            browser: { iconMarkup: icons.infoBrowser, label: 'Browser' },
+            cpu: { iconMarkup: icons.infoCpu, label: 'CPU info' },
+            device: { iconMarkup: icons.infoDevice, label: 'Device' },
+            engine: { iconMarkup: icons.infoEngine, label: 'Engine' },
+            os: { iconMarkup: icons.infoOs, label: 'OS info' },
+        };
 
-        extraInfo.innerText = resultString;
+        const rows = Object.entries(filteredResult)
+            .filter(([, data]) => Object.keys(data).length > 0)
+            .map(([section, data]) => {
+                const { iconMarkup, label } = sectionMeta[section] || {
+                    iconMarkup: icons.infoDefault,
+                    label: section,
+                };
+                const badges = Object.entries(data)
+                    .filter(([key]) => key !== 'major')
+                    .map(([, val]) => `<span class="extra-info-badge">${val}</span>`)
+                    .join('');
+                return `
+                    <div class="extra-info-row extra-info-row--${section}">
+                        <div class="extra-info-label">
+                            ${iconMarkup}
+                            <span>${label}</span>
+                        </div>
+                        <div class="extra-info-values">${badges}</div>
+                    </div>`;
+            })
+            .join('');
+
+        extraInfo.innerHTML = renderRoomTemplate('tpl-extra-info-grid', {
+            html: {
+                rows,
+            },
+        });
 
         return parserResult;
     } catch (error) {
@@ -1237,10 +1292,16 @@ function generateRandomName() {
 function getPeerAvatar() {
     const avatar = getQueryParam('avatar');
     const avatarDisabled = avatar === '0' || avatar === 'false';
+    const isBase64Avatar = typeof avatar === 'string' && avatar.startsWith('data:image/');
 
     console.log('Direct join', { avatar: avatar });
 
-    if (avatarDisabled || !isImageURL(avatar)) {
+    if (avatarDisabled || isBase64Avatar || !isValidAvatarURL(avatar)) {
+        const saved = lsSettings.peer_avatar;
+        if (saved && isValidAvatarURL(saved)) {
+            console.log('Restored avatar from localStorage', { avatar: saved });
+            return saved;
+        }
         return false;
     }
     return avatar;
@@ -1442,6 +1503,7 @@ async function sendToDataChannel(config) {
 async function handleConnect() {
     console.log('03. Connected to signaling server');
 
+    hideDisconnectBanner();
     myPeerId = signalingSocket.id;
     console.log('04. My peer id [ ' + myPeerId + ' ]');
 
@@ -1555,7 +1617,11 @@ function roomIsBusy() {
         imageUrl: images.forbidden,
         position: 'center',
         title: 'Room is busy',
-        html: `The room is limited to ${thisMaxRoomParticipants} users. <br/> Please try again later`,
+        html: renderRoomTemplate('tpl-room-busy-message', {
+            text: {
+                maxUsers: String(thisMaxRoomParticipants),
+            },
+        }),
         showDenyButton: false,
         confirmButtonText: `OK`,
         showClass: { popup: 'animate__animated animate__fadeInDown' },
@@ -1615,6 +1681,7 @@ function handleButtonsRule() {
     displayElements([
         { element: shareRoomBtn, display: buttons.main.showShareRoomBtn },
         { element: hideMeBtn, display: buttons.main.showHideMeBtn },
+        { element: fullScreenBtn, display: buttons.main.showFullScreenBtn },
         { element: settingsExtraDropdown, display: showExtraBtn },
         { element: audioBtn, display: buttons.main.showAudioBtn },
         { element: videoBtn, display: buttons.main.showVideoBtn },
@@ -1783,7 +1850,14 @@ function renderDynamicThemeCards() {
         card.className = 'theme-card';
         card.dataset.theme = name;
         card.dataset.index = index;
-        card.innerHTML = `<i class="${iconClass}"></i><span>${option.textContent}</span>`;
+        card.innerHTML = renderRoomTemplate('tpl-theme-card-content', {
+            text: {
+                label: option.textContent,
+            },
+            attrs: {
+                iconClass,
+            },
+        });
 
         // Apply dynamic icon color via inline style
         const icon = card.querySelector('i');
@@ -2061,7 +2135,7 @@ function userNameAlreadyInRoom() {
         imageUrl: images.forbidden,
         position: 'center',
         title: 'Username',
-        html: `The Username is already in use. <br/> Please try with another one`,
+        html: renderRoomTemplate('tpl-username-in-use-message'),
         showDenyButton: false,
         confirmButtonText: `OK`,
         showClass: { popup: 'animate__animated animate__fadeInDown' },
@@ -2633,6 +2707,10 @@ async function handleAddPeer(config) {
         return;
     }
 
+    // Re-broadcast current profile to ensure late joiners receive latest avatar/name.
+    // This uses the existing peerName signaling path.
+    emitMyPeerProfile();
+
     console.log('iceServers', iceServers[0]);
 
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
@@ -2693,6 +2771,18 @@ async function handleAddPeer(config) {
 
     // Screen reader announcement for peer joined
     screenReaderAccessibility.announceMessage(`${peer_name} joined the room`);
+}
+
+/**
+ * Broadcast my current profile (name + avatar) to room peers
+ */
+function emitMyPeerProfile() {
+    sendToServer('peerName', {
+        room_id: roomId,
+        peer_name_old: myPeerName,
+        peer_name_new: myPeerName,
+        peer_avatar: myPeerAvatar,
+    });
 }
 
 /**
@@ -2803,13 +2893,16 @@ async function handleOnTrack(peer_id, peers) {
         // Helper to load or attach stream
         const handleStream = (elementId, streamType) => {
             const element = getId(`${peer_id}___${elementId}`);
-            const hasStream = element?.srcObject && (elementId === 'audio' || hasVideoTrack(element.srcObject));
 
-            if (!hasStream) {
+            if (!element) {
+                // Tile doesn't exist yet — create everything
                 loadRemoteMediaStream(inbound, allPeers || peers, peer_id, streamType);
             } else {
+                // Tile already exists (e.g. peer joined with camera off) — just attach the new stream
                 attachMediaStream(element, inbound);
                 elemDisplay(element, true, 'block');
+                // Safari requires an explicit play() after srcObject is reassigned
+                element.play().catch(() => {});
             }
         };
 
@@ -2818,12 +2911,11 @@ async function handleOnTrack(peer_id, peers) {
 
             if (audioElement) {
                 attachMediaStream(audioElement, inbound);
-                if (!audioElement.srcObject) {
-                    audioElement.play().catch((err) => {
-                        console.warn('[AUDIO] Autoplay not allowed by device, setting up fallback:', err);
-                        handleAudioFallback(audioElement, peer_name);
-                    });
-                }
+                // Always call play() — srcObject was just assigned so the old check (!srcObject) was always false
+                audioElement.play().catch((err) => {
+                    console.warn('[AUDIO] Autoplay not allowed by device, setting up fallback:', err);
+                    handleAudioFallback(audioElement, peer_name);
+                });
             } else {
                 loadRemoteMediaStream(inbound, allPeers || peers, peer_id, 'audio');
             }
@@ -3027,10 +3119,19 @@ function handleSessionDescription(config) {
 
     const pc = peerConnections[peer_id];
 
+    if (!pc) {
+        console.warn('[RTCSessionDescription] peer connection missing, ignoring', { peer_id });
+        return;
+    }
+
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/setRemoteDescription
     pc.setRemoteDescription(remote_description)
         .then(() => {
             console.log('setRemoteDescription done!');
+
+            // Drain any queued ICE now that remoteDescription is set.
+            flushIceCandidates(peer_id).catch((err) => console.error('[Error] flushIceCandidates', err));
+
             if (session_description.type == 'offer') {
                 console.log('Creating answer');
                 // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createAnswer
@@ -3078,9 +3179,57 @@ function handleSessionDescription(config) {
 function handleIceCandidate(config) {
     const { peer_id, ice_candidate } = config;
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate
-    peerConnections[peer_id].addIceCandidate(new RTCIceCandidate(ice_candidate)).catch((err) => {
+    const pc = peerConnections[peer_id];
+
+    if (!pc) {
+        queueIceCandidate(peer_id, ice_candidate);
+        return;
+    }
+
+    // Queue until remoteDescription is set; otherwise addIceCandidate can fail and the candidate is lost.
+    if (!pc.remoteDescription || !pc.remoteDescription.type) {
+        queueIceCandidate(peer_id, ice_candidate);
+        return;
+    }
+
+    pc.addIceCandidate(new RTCIceCandidate(ice_candidate)).catch((err) => {
         console.error('[Error] addIceCandidate', err);
     });
+}
+
+/**
+ * If addIceCandidate is called before setRemoteDescription, it can fail and the candidate will be lost. To prevent this, we queue candidates until setRemoteDescription is called.
+ * @param {string} peer_id socket.id
+ * @param {object} ice_candidate RTCIceCandidateInit
+ * @returns {void}
+ */
+function queueIceCandidate(peer_id, ice_candidate) {
+    if (!peer_id || !ice_candidate) return;
+    if (!pendingIceCandidates[peer_id]) pendingIceCandidates[peer_id] = [];
+    pendingIceCandidates[peer_id].push(ice_candidate);
+}
+
+/**
+ * When setRemoteDescription is called, we can flush any queued ICE candidates for that peer.
+ * @param {string} peer_id socket.id
+ * @returns {Promise<void>}
+ */
+async function flushIceCandidates(peer_id) {
+    const pc = peerConnections[peer_id];
+    const queued = pendingIceCandidates[peer_id];
+
+    if (!pc || !queued || queued.length === 0) return;
+    if (!pc.remoteDescription || !pc.remoteDescription.type) return;
+
+    delete pendingIceCandidates[peer_id];
+
+    for (const ice of queued) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(ice));
+        } catch (err) {
+            console.error('[Error] addIceCandidate (queued)', err);
+        }
+    }
 }
 
 /**
@@ -3091,6 +3240,7 @@ function handleIceCandidate(config) {
 function handleDisconnect(reason) {
     console.log('Disconnected from signaling server', { reason: reason });
 
+    showDisconnectBanner();
     checkRecording();
 
     for (const peer_id in peerConnections) {
@@ -3140,6 +3290,7 @@ function handleDisconnect(reason) {
     chatDataChannels = {};
     fileDataChannels = {};
     peerConnections = {};
+    pendingIceCandidates = {};
     peerScreenMediaElements = {};
     peerVideoMediaElements = {};
     peerAudioMediaElements = {};
@@ -3213,6 +3364,7 @@ function handleRemovePeer(config) {
     delete chatDataChannels[peer_id];
     delete fileDataChannels[peer_id];
     delete peerConnections[peer_id];
+    delete pendingIceCandidates[peer_id];
     delete peerScreenMediaElements[peerScreenId];
     delete peerVideoMediaElements[peerVideoId];
     delete peerAudioMediaElements[peerAudioId];
@@ -4629,6 +4781,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteMedia.setAttribute('id', peer_id + '___video');
             remoteMedia.setAttribute('playsinline', true);
             remoteMedia.autoplay = true;
+            remoteMedia.muted = true; // audio is handled by a separate <audio> element; muting allows autoplay on Safari
             remoteMediaControls = isMobileDevice ? false : remoteMediaControls;
             remoteMedia.style.objectFit = 'var(--video-object-fit)';
             remoteMedia.style.name = peer_id + '_typeCam';
@@ -4654,6 +4807,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             videoMediaContainer.appendChild(remoteVideoWrap);
             // attachMediaStream is a part of the adapter.js library
             attachMediaStream(remoteMedia, stream);
+            // Explicitly play – required on mobile Safari where autoplay alone is not enough
+            remoteMedia.play().catch(() => {});
 
             // resize video elements
             adaptAspectRatio();
@@ -4847,6 +5002,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
             remoteScreenMedia.setAttribute('id', peer_id + '___screen');
             remoteScreenMedia.setAttribute('playsinline', true);
             remoteScreenMedia.autoplay = true;
+            remoteScreenMedia.muted = true; // audio is handled by a separate <audio> element; muting allows autoplay on Safari
             remoteScreenMedia.controls = remoteMediaControls;
             remoteScreenMedia.style.objectFit = 'contain';
             remoteScreenMedia.style.name = peer_id + '_typeScreen';
@@ -4867,6 +5023,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
 
             videoMediaContainer.appendChild(remoteScreenWrap);
             attachMediaStream(remoteScreenMedia, stream);
+            // Explicitly play – required on mobile Safari where autoplay alone is not enough
+            remoteScreenMedia.play().catch(() => {});
             adaptAspectRatio();
 
             // handle remote private messages
@@ -5259,10 +5417,11 @@ function genAvatarSvg(peerName, avatarImgSize) {
  */
 function setPeerAvatarImgName(videoAvatarImageId, peerName, peerAvatar) {
     const videoAvatarImageElement = getId(videoAvatarImageId);
+    if (!videoAvatarImageElement) return;
     videoAvatarImageElement.style.pointerEvents = 'none';
 
     // If a valid avatar image URL is provided
-    if (peerAvatar && isImageURL(peerAvatar)) {
+    if (peerAvatar && isValidAvatarURL(peerAvatar)) {
         videoAvatarImageElement.setAttribute('src', peerAvatar);
     }
     // If not, use SVG based on the email validity
@@ -5285,7 +5444,7 @@ function setPeerAvatarImgName(videoAvatarImageId, peerName, peerAvatar) {
  */
 function setPeerChatAvatarImgName(avatar, peerName, peerAvatar) {
     const avatarImg =
-        peerAvatar && isImageURL(peerAvatar)
+        peerAvatar && isValidAvatarURL(peerAvatar)
             ? peerAvatar
             : isValidEmail(peerName)
               ? genGravatar(peerName)
@@ -6394,9 +6553,7 @@ function setChatRoomBtn() {
 function setParticipantsBtn() {
     participantsBtn.addEventListener('click', async (e) => {
         e.preventDefault();
-        if (!isChatRoomVisible) {
-            showChatRoomDraggable();
-        }
+        const openedChatForParticipants = !isChatRoomVisible;
 
         if (!isMobileDevice && canBePinned()) {
             if (isCaptionPinned) {
@@ -6404,17 +6561,65 @@ function setParticipantsBtn() {
                 return;
             }
 
+            if (isChatRoomVisible && isChatPinned && msgerDraggable.classList.contains('msger-pinned-sidebar-open')) {
+                if (isChatOpenedByParticipantsBtn) {
+                    hideChatRoomAndEmojiPicker();
+                    isChatOpenedByParticipantsBtn = false;
+                    return;
+                }
+
+                msgerDraggable.classList.remove('msger-pinned-sidebar-open');
+                msgerCPBtn.classList.remove('active');
+                closeAllMsgerParticipantDropdownMenus();
+                screenReaderAccessibility.announceMessage('Participants list closed');
+                return;
+            }
+
+            msgerDraggable.classList.add('msger-pinned-sidebar-open');
+
+            if (!isChatRoomVisible) {
+                showChatRoomDraggable();
+            }
+
+            isChatOpenedByParticipantsBtn = openedChatForParticipants;
+
             if (!isChatPinned) {
                 chatPin();
             }
 
-            openPinnedParticipantsSidebar(true);
+            // Wait for the panel-slide-in animation to play before overlaying the participants sidebar.
+            await sleep(500);
+
+            msgerCPBtn.classList.add('active');
+            searchPeerBarName?.focus();
+            screenReaderAccessibility.announceMessage('Participants list opened');
             return;
         }
 
-        syncParticipantsPanelVisibility(true);
-        searchPeerBarName?.focus();
-        screenReaderAccessibility.announceMessage('Participants list opened');
+        if (!isChatRoomVisible) {
+            showChatRoomDraggable();
+        }
+
+        const shouldShowParticipants = !isParticipantsVisible;
+        const shouldHideChatWithParticipants = !shouldShowParticipants && isChatOpenedByParticipantsBtn;
+
+        if (shouldHideChatWithParticipants) {
+            hideChatRoomAndEmojiPicker();
+            isChatOpenedByParticipantsBtn = false;
+            return;
+        }
+
+        isChatOpenedByParticipantsBtn = shouldShowParticipants ? openedChatForParticipants : false;
+
+        syncParticipantsPanelVisibility(shouldShowParticipants);
+
+        if (shouldShowParticipants) {
+            searchPeerBarName?.focus();
+            screenReaderAccessibility.announceMessage('Participants list opened');
+            return;
+        }
+
+        screenReaderAccessibility.announceMessage('Participants list closed');
     });
 }
 
@@ -6850,8 +7055,8 @@ function setMyWhiteboardBtn() {
 function setMyFileShareBtn() {
     // make send-receive file div draggable
     if (!isMobileDevice) {
-        dragElement(sendFileDiv, imgShareSend);
-        dragElement(receiveFileDiv, imgShareReceive);
+        dragElement(sendFileDiv, sendFileDragHandle);
+        dragElement(receiveFileDiv, receiveFileDragHandle);
     }
 
     fileShareBtn.addEventListener('click', (e) => {
@@ -7121,6 +7326,13 @@ function setMySettingsBtn() {
     myPeerNameSetBtn.addEventListener('click', (e) => {
         updateMyPeerName();
     });
+    myProfileAvatarUploadBtn.addEventListener('click', async () => {
+        await updateMyPeerAvatarByUrl();
+    });
+    myProfileAvatarResetBtn.addEventListener('click', () => {
+        resetMyPeerAvatarInMemory();
+    });
+    updateMyAvatarResetButtonVisibility();
     // Sounds
     switchSounds.addEventListener('change', (e) => {
         notifyBySound = e.currentTarget.checked;
@@ -8242,14 +8454,11 @@ function shareRoomMeetingURL(checkScreen = false) {
         background: swBg,
         position: 'center',
         title: 'Share the room',
-        html: `
-        <div id="qrRoomContainer">
-            <canvas id="qrRoom"></canvas>
-        </div>
-        <br/>
-        <p style="color:rgb(8, 189, 89);">Join from your mobile device</p>
-        <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">No need for apps, simply capture the QR code with your mobile camera Or Invite someone else to join by sending them the following URL</p>
-        <p style="color:rgb(8, 189, 89);">${roomURL}</p>`,
+        html: renderRoomTemplate('tpl-share-room-modal', {
+            text: {
+                roomURL,
+            },
+        }),
         showDenyButton: true,
         showCancelButton: true,
         cancelButtonColor: 'red',
@@ -9603,7 +9812,11 @@ async function downloadRecordedStream() {
             </ul>
         <br/>
         `;
-        lastRecordingInfo.innerHTML = `<br/>Last recording info: ${recordingInfo}`;
+        lastRecordingInfo.innerHTML = renderRoomTemplate('tpl-last-recording-info', {
+            html: {
+                recordingInfo,
+            },
+        });
         recordingTime.innerText = '';
 
         msgHTML(
@@ -9958,6 +10171,9 @@ function chatPin() {
     if (!isMobileDevice) {
         undragElement(msgerDraggable, msgerHeader);
     }
+    msgerDraggable.classList.remove('panel-slide-in');
+    void msgerDraggable.offsetWidth; // force reflow so the animation always restarts
+    msgerDraggable.classList.add('panel-slide-in');
 }
 
 /**
@@ -9965,6 +10181,7 @@ function chatPin() {
  */
 function chatUnpin() {
     videoMediaContainerUnpin();
+    msgerDraggable.classList.remove('panel-slide-in');
     setSP('--msger-width', 'min(1120px, 92vw)');
     setSP('--msger-height', 'min(760px, 92vh)');
     elemDisplay(msgerMinBtn, false);
@@ -10073,6 +10290,9 @@ function captionPin() {
     setColor(captionTogglePin, 'lime');
     resizeVideoMedia();
     if (!isMobileDevice) undragElement(captionDraggable, captionHeader);
+    captionDraggable.classList.remove('panel-slide-in');
+    void captionDraggable.offsetWidth; // force reflow so the animation always restarts
+    captionDraggable.classList.add('panel-slide-in');
 }
 
 /**
@@ -10080,6 +10300,7 @@ function captionPin() {
  */
 function captionUnpin() {
     videoMediaContainerUnpin();
+    captionDraggable.classList.remove('panel-slide-in');
     setSP('--caption-width', '420px');
     setSP('--caption-height', '680px');
     elemDisplay(captionMinBtn, false);
@@ -10194,6 +10415,7 @@ function hideChatRoomAndEmojiPicker() {
     chatRoomBtn.className = className.chatOn;
     isChatRoomVisible = false;
     isParticipantsVisible = false;
+    isChatOpenedByParticipantsBtn = false;
     isChatEmojiVisible = false;
     setTippy(chatRoomBtn, 'Open the chat', bottomButtonsPlacement);
     screenReaderAccessibility.announceMessage('Chat closed');
@@ -10569,7 +10791,7 @@ function handleSpeechTranscript(config) {
     const time_stamp = getFormatDate(new Date());
 
     const avatar_image =
-        peer_avatar && isImageURL(peer_avatar)
+        peer_avatar && isValidAvatarURL(peer_avatar)
             ? peer_avatar
             : isValidEmail(peer_name)
               ? genGravatar(peer_name)
@@ -10577,18 +10799,26 @@ function handleSpeechTranscript(config) {
 
     if (!isCaptionBoxVisible && transcriptShowOnMsg) showCaptionDraggable();
 
-    const msgHTML = `
-	<div class="msg left-msg">
-        <img class="msg-img" src="${avatar_image}" />
-		<div class="msg-caption-bubble">
-            <div class="msg-info">
-                <div class="msg-info-name">${peer_name} : ${time_stamp}</div>
-            </div>
-            <div class="msg-text">${text_data}</div>
-        </div>
-	</div>
-    `;
+    // avatar_image is a user-controlled URL; do NOT interpolate it into
+    // insertAdjacentHTML — filterXSS encodes " to &quot; which the HTML
+    // parser decodes back to " in attribute context (double-decode XSS).
+    // Use a temporary id and setAttribute instead.
+    const captionAvatarTmpId = `capt-av-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const msgHTML = renderRoomTemplate('tpl-caption-message', {
+        text: {
+            captionInfoText: `${peer_name} : ${time_stamp}`,
+            captionText: text_data,
+        },
+        attrs: {
+            captionAvatarTmpId,
+        },
+    });
     captionChat.insertAdjacentHTML('beforeend', msgHTML);
+    const captionAvatarEl = document.getElementById(captionAvatarTmpId);
+    if (captionAvatarEl) {
+        captionAvatarEl.setAttribute('src', avatar_image);
+        captionAvatarEl.removeAttribute('id');
+    }
     captionChat.scrollTop += 500;
     transcripts.push({
         time: time_stamp,
@@ -10633,7 +10863,15 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     const getFrom = filterXSS(from);
     const getTo = filterXSS(to);
     const getSide = filterXSS(side);
-    const getImg = getFrom === CHAT_GPT_NAME && getSide === 'left' ? images.chatgpt : filterXSS(img);
+    // img is always internally computed (isValidAvatarURL / genAvatarSvg / genGravatar) and is
+    // set via setAttribute — no XSS risk. filterXSS must NOT be applied here because it encodes
+    // '<', '>' and '&' which breaks SVG data URIs produced by genAvatarSvg.
+    const getImg =
+        getFrom === CHAT_GPT_NAME && getSide === 'left'
+            ? images.chatgpt
+            : isValidAvatarURL(img) || (typeof img === 'string' && img.startsWith('data:image/'))
+              ? img
+              : '';
     const getMsg = filterXSS(msg);
     const getPrivateMsg = filterXSS(privateMsg);
     const normalizedMsgId = normalizeChatMessageId(msgId);
@@ -10652,23 +10890,10 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
     // check if i receive a private message
     let msgBubble = getPrivateMsg ? 'private-msg-bubble' : 'msg-bubble';
 
-    let msgHTML = `
-	<div id="msg-${chatMessagesId}" class="msg ${getSide}-msg" data-sender="${getFrom}" data-chat-type="${
-        getPrivateMsg ? 'private' : 'public'
-    }" data-chat-peer="${conversationPeer}" data-msg-id="${normalizedMsgId}">
-        <img class="msg-img" src="${getImg}" />
-		<div class=${msgBubble}>
-            <div class="msg-info">
-                <div class="msg-info-name">${getFrom}</div>
-                <div class="msg-info-time">${time}</div>
-            </div>
-            <div class="msg-text">
-            <span id="message-${chatMessagesId}"></span>
-                <hr/>
-                <div class="msg-footer">
-                    <div class="msg-actions">
-    `;
-    msgHTML += `
+    // getImg is a user-controlled URL; use a temporary id and setAttribute
+    // after insertion to avoid double-decode XSS via insertAdjacentHTML.
+    const msgAvatarTmpId = `msg-av-${chatMessagesId}`;
+    let messageActionsHTML = `
                 <button
                     id="msg-delete-${chatMessagesId}"
                     class="${className.trash}"
@@ -10681,7 +10906,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                     style="color:#fff; border:none; background:transparent;"
                     onclick="copyToClipboard('message-${chatMessagesId}')"
                 ></button>`;
-    msgHTML += `
+    messageActionsHTML += `
                 <button
                     id="msg-reaction-${chatMessagesId}"
                     class="reaction-toggle-btn"
@@ -10689,7 +10914,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                     onclick="toggleReactionPicker('${normalizedMsgId}', this)"
                 >😊</button>`;
     if (isSpeechSynthesisSupported) {
-        msgHTML += `
+        messageActionsHTML += `
                 <button
                     id="msg-speech-${chatMessagesId}"
                     class="${className.speech}" 
@@ -10697,16 +10922,33 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                     onclick="speechElementText(false, '${getFrom}', 'message-${chatMessagesId}')"
                 ></button>`;
     }
-    msgHTML += ` 
-                    </div>
-                    <div class="message-reactions"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    `;
+
+    const msgHTML = renderRoomTemplate('tpl-msger-chat-message', {
+        text: {
+            senderName: getFrom,
+            messageTime: time,
+        },
+        html: {
+            messageActions: messageActionsHTML,
+        },
+        attrs: {
+            messageContainerId: `msg-${chatMessagesId}`,
+            messageContainerClass: `msg ${getSide}-msg`,
+            chatType: getPrivateMsg ? 'private' : 'public',
+            chatPeer: conversationPeer,
+            messageId: normalizedMsgId,
+            messageAvatarTmpId: msgAvatarTmpId,
+            messageBubbleClass: msgBubble,
+            messageTextId: `message-${chatMessagesId}`,
+        },
+    });
 
     msgerChat.insertAdjacentHTML('beforeend', msgHTML);
+    const msgAvatarEl = document.getElementById(msgAvatarTmpId);
+    if (msgAvatarEl) {
+        msgAvatarEl.setAttribute('src', getImg);
+        msgAvatarEl.removeAttribute('id');
+    }
 
     const message = getId(`message-${chatMessagesId}`);
     if (message) {
@@ -10906,8 +11148,9 @@ function resolvePeerNameById(peerId = '') {
     if (peerId === CHAT_GPT_PEER_ID) return CHAT_GPT_NAME;
 
     const privateChatButton = getId(peerId + '_pMsgBtn');
-    if (privateChatButton?.value) {
-        return privateChatButton.value;
+    const privatePeerName = privateChatButton?.dataset?.value || privateChatButton?.getAttribute('data-value');
+    if (privatePeerName) {
+        return privatePeerName;
     }
 
     return allPeers[peerId]?.peer_name || '';
@@ -10941,31 +11184,22 @@ function ensureChatGPTConversationEntry() {
         return;
     }
 
-    const chatGPTEntry = `
-    <div id="${CHAT_GPT_PEER_ID}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${CHAT_GPT_NAME.toLowerCase()}">
-        <div
-            id="${CHAT_GPT_PEER_ID}_pMsgBtn"
-            class="msger-chat-item"
-            role="button"
-            tabindex="0"
-            data-value="${CHAT_GPT_NAME}"
-            data-peer-id="${CHAT_GPT_PEER_ID}"
-            title="${CHAT_GPT_NAME}"
-        >
-            <img
-                id="${CHAT_GPT_PEER_ID}_pMsgAvatar"
-                class="msger-chat-avatar"
-                src="${images.chatgpt}"
-                alt="${CHAT_GPT_NAME}"
-            />
-            <span class="msger-chat-item-copy">
-                <strong>${CHAT_GPT_NAME}</strong>
-                <small>Ask anything</small>
-            </span>
-            <span id="${CHAT_GPT_PEER_ID}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
-        </div>
-    </div>
-    `;
+    const chatGPTEntry = renderRoomTemplate('tpl-chatgpt-participant-entry', {
+        text: {
+            participantName: CHAT_GPT_NAME,
+            participantSubtitle: 'Ask anything',
+        },
+        attrs: {
+            participantName: CHAT_GPT_NAME,
+            entryId: `${CHAT_GPT_PEER_ID}_pMsgDiv`,
+            entryPeerName: CHAT_GPT_NAME.toLowerCase(),
+            buttonId: `${CHAT_GPT_PEER_ID}_pMsgBtn`,
+            participantPeerId: CHAT_GPT_PEER_ID,
+            avatarId: `${CHAT_GPT_PEER_ID}_pMsgAvatar`,
+            avatarSrc: images.chatgpt,
+            badgeId: `${CHAT_GPT_PEER_ID}_pMsgBadge`,
+        },
+    });
 
     msgerCPList.insertAdjacentHTML('afterbegin', chatGPTEntry);
 
@@ -11280,7 +11514,7 @@ async function msgerAddPeers(peers) {
             // if there isn't add it....
             if (!exsistMsgerPrivateDiv) {
                 const chatAvatar =
-                    peer_avatar && isImageURL(peer_avatar)
+                    peer_avatar && isValidAvatarURL(peer_avatar)
                         ? peer_avatar
                         : isValidEmail(peer_name)
                           ? genGravatar(peer_name)
@@ -11308,28 +11542,33 @@ async function msgerAddPeers(peers) {
                     `;
                 }
 
-                const msgerPrivateDiv = `
-                <div id="${peer_id}_pMsgDiv" class="msger-private-chat-entry" data-peer-name="${peer_name.toLowerCase()}">
-                    <div id="${peer_id}_pMsgBtn" class="msger-chat-item" role="button" tabindex="0" data-value="${peer_name}" data-peer-id="${peer_id}" title="${peer_name}">
-                        <img id="${peer_id}_pMsgAvatar" class="msger-chat-avatar" src="${chatAvatar}" alt="${peer_name}" />
-                        <span class="msger-chat-item-copy">
-                            <strong>${peer_name}</strong>
-                            <small>Open private conversation</small>
-                        </span>
-                        <span id="${peer_id}_pMsgBadge" class="msger-chat-unread-badge hidden">0</span>
-                        <div id="${peer_id}_pDropdownMenu" class="dropdown-menu-custom msger-participant-dropdown">
-                            <button id="${peer_id}_pDropdownToggle" class="dropdown-toggle" type="button">
-                                <i class="fas fa-ellipsis-vertical"></i>
-                            </button>
-                            <ul id="${peer_id}_pDropdownMenuList" class="dropdown-menu-custom-list app-dropdown-menu msger-participant-dropdown-menu">
-                                ${dropdownOptions}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                `;
+                const msgerPrivateDiv = renderRoomTemplate('tpl-msger-private-entry', {
+                    text: {
+                        participantName: peer_name,
+                        participantSubtitle: 'Open private conversation',
+                    },
+                    html: {
+                        dropdownOptions,
+                    },
+                    attrs: {
+                        participantName: peer_name,
+                        entryId: `${peer_id}_pMsgDiv`,
+                        entryPeerName: peer_name.toLowerCase(),
+                        buttonId: `${peer_id}_pMsgBtn`,
+                        participantPeerId: peer_id,
+                        avatarTmpId: `${peer_id}_pMsgAvatar`,
+                        badgeId: `${peer_id}_pMsgBadge`,
+                        dropdownMenuId: `${peer_id}_pDropdownMenu`,
+                        dropdownToggleId: `${peer_id}_pDropdownToggle`,
+                        dropdownListId: `${peer_id}_pDropdownMenuList`,
+                    },
+                });
 
                 msgerCPList.insertAdjacentHTML('beforeend', msgerPrivateDiv);
+                const participantAvatar = getId(`${peer_id}_pMsgAvatar`);
+                if (participantAvatar) {
+                    participantAvatar.setAttribute('src', chatAvatar);
+                }
                 msgerCPList.scrollTop += 500;
 
                 const msgerPrivateBtn = getId(peer_id + '_pMsgBtn');
@@ -11634,12 +11873,32 @@ function isValidHttpURL(input) {
  */
 function isImageURL(input) {
     if (!input || typeof input !== 'string') return false;
+    // Data URLs can still be valid images for generic content handling.
+    if (input.startsWith('data:image/')) return true;
     try {
         const url = new URL(input);
         return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.svg'].some((ext) =>
             url.pathname.toLowerCase().endsWith(ext)
         );
     } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Check if a URL is a valid HTTP/HTTPS avatar URL.
+ * Unlike isImageURL, this does NOT require a file extension,
+ * so it accepts dynamic avatar endpoints (e.g. GitHub, Gravatar, DiceBear).
+ * @param {string} input
+ * @returns {boolean}
+ */
+function isValidAvatarURL(input) {
+    if (!input || typeof input !== 'string') return false;
+    if (input.startsWith('data:')) return false;
+    try {
+        const url = new URL(input);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
         return false;
     }
 }
@@ -11805,17 +12064,11 @@ function emitMsg(from, fromAvatar, to, msg, privateMsg, id, msgId = '') {
 function showAITypingIndicator(aiName) {
     const existing = getId(`ai-typing-${aiName}`);
     if (existing) return;
-    const typingHTML = `
-        <div id="ai-typing-${aiName}" class="msg left-msg">
-            <div class="ai-typing-indicator">
-                <div class="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
-        </div>
-    `;
+    const typingHTML = renderRoomTemplate('tpl-ai-typing-indicator', {
+        attrs: {
+            typingIndicatorId: `ai-typing-${aiName}`,
+        },
+    });
     msgerChat.insertAdjacentHTML('beforeend', typingHTML);
     msgerChat.scrollTop = msgerChat.scrollHeight;
 }
@@ -12076,11 +12329,184 @@ async function updateMyPeerName() {
 }
 
 /**
+ * Update my avatar from URL in-memory only (cleared on page refresh)
+ */
+async function updateMyPeerAvatarByUrl() {
+    const result = await Swal.fire({
+        background: swBg,
+        title: 'Set avatar URL',
+        input: 'url',
+        inputLabel: 'Public image URL',
+        inputPlaceholder: 'https://example.com/avatar.jpg',
+        confirmButtonText: 'Apply',
+        showCancelButton: true,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        inputValidator: (value) => {
+            if (!value) return 'Please enter an image URL';
+            if (value.startsWith('data:')) return 'Base64 avatars are not supported';
+            if (!isValidAvatarURL(value)) return 'Only http/https URLs are supported';
+            return null;
+        },
+        preConfirm: (url) =>
+            new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(url);
+                img.onerror = () => {
+                    Swal.showValidationMessage(
+                        'Could not load the image, the URL may be invalid, restricted, or not an image'
+                    );
+                    resolve(false); // keep dialog open
+                };
+                img.src = url;
+            }),
+        didOpen: () => {
+            const input = document.querySelector('.swal2-input');
+            if (!input) return;
+
+            const preview = document.createElement('img');
+            preview.style.cssText =
+                'display:none;width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #4caf50;margin:8px auto 4px;';
+            input.parentNode.insertBefore(preview, input);
+
+            function updatePreview(url) {
+                if (!url) {
+                    preview.style.display = 'none';
+                    return;
+                }
+                preview.src = url;
+                preview.style.display = 'block';
+            }
+
+            input.addEventListener('input', (e) => updatePreview(e.target.value.trim()));
+
+            function makeAvatarImg(url) {
+                const img = document.createElement('img');
+                img.src = url;
+                img.title = 'Click to use this avatar';
+                img.style.cssText =
+                    'width:48px;height:48px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color 0.2s;object-fit:cover;background:#222;flex-shrink:0;';
+                img.addEventListener('mouseover', () => (img.style.borderColor = '#4caf50'));
+                img.addEventListener('mouseout', () => (img.style.borderColor = 'transparent'));
+                img.addEventListener('click', () => {
+                    input.value = url;
+                    input.dispatchEvent(new Event('input'));
+                    updatePreview(url);
+                });
+                return img;
+            }
+
+            // Self-hosted avatars
+            const localLabel = document.createElement('p');
+            localLabel.textContent = 'Pick an avatar:';
+            localLabel.style.cssText = 'color:#aaa;font-size:12px;margin:10px 0 6px;text-align:center;';
+
+            const localGrid = document.createElement('div');
+            localGrid.style.cssText =
+                'display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-height:120px;overflow-y:scroll;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:4px 2px;margin-bottom:4px;';
+            localGrid.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+
+            for (let i = 1; i <= 25; i++) {
+                const url = `${window.location.origin}/images/avatars/avatar_${String(i).padStart(2, '0')}.png`;
+                localGrid.appendChild(makeAvatarImg(url));
+            }
+
+            // DiceBear random avatars
+            const randomAvatarLabel = document.createElement('p');
+            randomAvatarLabel.textContent = 'Or pick a random avatar:';
+            randomAvatarLabel.style.cssText = 'color:#aaa;font-size:12px;margin:10px 0 6px;text-align:center;';
+
+            const randomAvatarGrid = document.createElement('div');
+            randomAvatarGrid.style.cssText =
+                'display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:4px;';
+            const dicebearStyles = [
+                'bottts-neutral',
+                'adventurer-neutral',
+                'thumbs',
+                'initials',
+                'identicon',
+                'shapes',
+            ];
+
+            for (let i = 0; i < 6; i++) {
+                const seed = Math.random().toString(36).substring(2, 10);
+                const style = dicebearStyles[i % dicebearStyles.length];
+                const url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
+                randomAvatarGrid.appendChild(makeAvatarImg(url));
+            }
+
+            let insertAfter = input;
+            for (const el of [localLabel, localGrid, randomAvatarLabel, randomAvatarGrid]) {
+                insertAfter.parentNode.insertBefore(el, insertAfter.nextSibling);
+                insertAfter = el;
+            }
+        },
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+
+    try {
+        myPeerAvatar = result.value;
+        hasTemporaryAvatar = true;
+        lsSettings.peer_avatar = myPeerAvatar;
+        lS.setSettings(lsSettings);
+
+        setPeerAvatarImgName('myVideoAvatarImage', myPeerName, myPeerAvatar);
+        setPeerAvatarImgName('myProfileAvatar', myPeerName, myPeerAvatar);
+        setPeerChatAvatarImgName('right', myPeerName, myPeerAvatar);
+        updateMyAvatarResetButtonVisibility();
+
+        emitMyPeerProfile();
+
+        userLog('toast', 'Avatar saved and will persist across sessions');
+    } catch (err) {
+        console.error('Failed to set avatar URL', err);
+        userLog('error', 'Unable to apply avatar URL');
+    }
+}
+
+/**
+ * Reset in-memory avatar to default generated/fallback avatar
+ */
+function resetMyPeerAvatarInMemory() {
+    myPeerAvatar = false;
+    hasTemporaryAvatar = false;
+    lsSettings.peer_avatar = '';
+    lS.setSettings(lsSettings);
+    setPeerAvatarImgName('myVideoAvatarImage', myPeerName, myPeerAvatar);
+    setPeerAvatarImgName('myProfileAvatar', myPeerName, myPeerAvatar);
+    setPeerChatAvatarImgName('right', myPeerName, myPeerAvatar);
+    updateMyAvatarResetButtonVisibility();
+
+    emitMyPeerProfile();
+
+    userLog('toast', 'Avatar reset and removed from storage');
+}
+
+/**
+ * Show reset avatar button only for uploaded temporary avatars
+ */
+function updateMyAvatarResetButtonVisibility() {
+    if (!myProfileAvatarResetBtn) return;
+    myProfileAvatarResetBtn.classList.toggle('hidden', !hasTemporaryAvatar);
+    if (myProfileAvatarUploadBtn) myProfileAvatarUploadBtn.classList.toggle('hidden', hasTemporaryAvatar);
+}
+
+/**
  * Append updated peer name to video player
  * @param {object} config data
  */
 function handlePeerName(config) {
-    const { peer_id, peer_name, peer_avatar } = config;
+    const peer_id = config.peer_id;
+    const peer_name = filterXSS(config.peer_name);
+    const peer_avatar = filterXSS(config.peer_avatar);
+
+    // Keep the latest profile in memory so late DOM creation still uses updated data.
+    if (allPeers && allPeers[peer_id]) {
+        allPeers[peer_id]['peer_name'] = peer_name;
+        allPeers[peer_id]['peer_avatar'] = peer_avatar;
+    }
+
     const videoName = getId(peer_id + '_name');
     const screenName = getId(peer_id + '_screen_name');
     if (videoName) videoName.innerText = peer_name;
@@ -12092,7 +12518,7 @@ function handlePeerName(config) {
 
     if (msgerPeerAvatar) {
         msgerPeerAvatar.src =
-            peer_avatar && isImageURL(peer_avatar)
+            peer_avatar && isValidAvatarURL(peer_avatar)
                 ? peer_avatar
                 : isValidEmail(peer_name)
                   ? genGravatar(peer_name)
@@ -12434,6 +12860,8 @@ function setPeerVideoStatus(peer_id, status) {
             { element: peerVideoPlayer, display: true, mode: 'block' },
             { element: peerVideoAvatarImage, display: false },
         ]);
+        // Safari requires explicit play() when a video element becomes visible again
+        if (peerVideoPlayer) peerVideoPlayer.play().catch(() => {});
         if (peerVideoStatus) {
             setMediaButtonsClass([{ element: peerVideoStatus, status: true, mediaType: 'video' }]);
             setTippy(peerVideoStatus, 'Participant video is on', 'bottom');
@@ -12620,6 +13048,55 @@ document.addEventListener('click', (event) => {
     msgerChat?.querySelectorAll('.reaction-picker').forEach((picker) => picker.remove());
 });
 
+function getRoomEmojiPlacement() {
+    const viewportWidth = Math.max(window.innerWidth || 0, 320);
+    const viewportHeight = Math.max(window.innerHeight || 0, 320);
+    const isCompactViewport = viewportWidth < 640;
+    const now = Date.now();
+    const burstWindow = 900;
+    const maxBurstSize = isCompactViewport ? 4 : 6;
+    const marginX = isCompactViewport ? 18 : 34;
+    const marginY = isCompactViewport ? 96 : 124;
+    const minAnchorX = viewportWidth * 0.2;
+    const maxAnchorX = viewportWidth * 0.8;
+    const minAnchorY = viewportHeight * 0.42;
+    const maxAnchorY = viewportHeight * 0.76;
+
+    if (now - roomEmojiBurstState.startedAt > burstWindow || roomEmojiBurstState.count >= maxBurstSize) {
+        roomEmojiBurstState.startedAt = now;
+        roomEmojiBurstState.count = 0;
+        roomEmojiBurstState.anchorX = minAnchorX + Math.random() * Math.max(1, maxAnchorX - minAnchorX);
+        roomEmojiBurstState.anchorY = minAnchorY + Math.random() * Math.max(1, maxAnchorY - minAnchorY);
+    }
+
+    const burstIndex = roomEmojiBurstState.count;
+    roomEmojiBurstState.count += 1;
+
+    const baseAngle = -90 + (burstIndex - (maxBurstSize - 1) / 2) * (isCompactViewport ? 24 : 18);
+    const jitterAngle = Math.random() * 12 - 6;
+    const angle = ((baseAngle + jitterAngle) * Math.PI) / 180;
+    const radius = (isCompactViewport ? 18 : 24) + burstIndex * (isCompactViewport ? 14 : 18) + Math.random() * 14;
+    const left = Math.min(
+        viewportWidth - marginX,
+        Math.max(marginX, roomEmojiBurstState.anchorX + Math.cos(angle) * radius)
+    );
+    const top = Math.min(
+        viewportHeight - marginY,
+        Math.max(marginY, roomEmojiBurstState.anchorY + Math.sin(angle) * radius * 0.6)
+    );
+    const drift = `${(Math.cos(angle) * (radius * 0.95) + (Math.random() * 18 - 9)).toFixed(0)}px`;
+    const rise = `-${(Math.abs(Math.sin(angle)) * 70 + Math.random() * 70 + (isCompactViewport ? 120 : 165)).toFixed(0)}px`;
+    const rotation = `${(Math.random() * 16 - 8).toFixed(1)}deg`;
+
+    return {
+        left,
+        top,
+        drift,
+        rise,
+        rotation,
+    };
+}
+
 /**
  * Handle room emoji reaction
  * @param {object} message
@@ -12628,14 +13105,23 @@ document.addEventListener('click', (event) => {
 function handleEmoji(message, duration = 5000) {
     if (userEmoji) {
         const emojiDisplay = document.createElement('div');
-        emojiDisplay.className = 'animate__animated animate__backInUp';
-        emojiDisplay.style.padding = '10px';
-        emojiDisplay.style.fontSize = '2vh';
-        emojiDisplay.style.color = '#FFF';
-        emojiDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
-        emojiDisplay.style.borderRadius = '10px';
-        emojiDisplay.style.marginBottom = '5px';
-        emojiDisplay.innerText = `${message.emoji} ${message.peer_name}`;
+        const placement = getRoomEmojiPlacement();
+        const label = message.peer_name || 'Guest';
+        const emojiIcon = document.createElement('span');
+        const emojiName = document.createElement('span');
+
+        emojiDisplay.className = 'user-emoji-burst';
+        emojiDisplay.style.left = `${placement.left}px`;
+        emojiDisplay.style.top = `${placement.top}px`;
+        emojiDisplay.style.setProperty('--emoji-drift', placement.drift);
+        emojiDisplay.style.setProperty('--emoji-rise', placement.rise);
+        emojiDisplay.style.setProperty('--emoji-rotation', placement.rotation);
+        emojiIcon.className = 'user-emoji-burst__icon';
+        emojiIcon.textContent = message.emoji;
+        emojiName.className = 'user-emoji-burst__name';
+        emojiName.textContent = label;
+        emojiDisplay.appendChild(emojiIcon);
+        emojiDisplay.appendChild(emojiName);
         userEmoji.appendChild(emojiDisplay);
 
         setTimeout(() => {
@@ -13159,10 +13645,11 @@ function handleUnlockTheRoom() {
 }
 
 /**
- * Handle whiteboard toogle
+ * Handle whiteboard toggle
  */
 function handleWhiteboardToggle() {
-    thereArePeerConnections() ? whiteboardAction(getWhiteboardAction('toggle')) : toggleWhiteboard();
+    const action = wbIsOpen ? 'close' : 'open';
+    thereArePeerConnections() ? whiteboardAction(getWhiteboardAction(action)) : toggleWhiteboard();
 }
 
 /**
@@ -13638,25 +14125,7 @@ function createStickyNote() {
     Swal.fire({
         background: swBg,
         title: 'Create Sticky Note',
-        html: `
-        <div class="sticky-note-form">
-            <textarea id="stickyNoteText" class="sticky-note-textarea" rows="4" placeholder="Type your note here...">Note</textarea>
-            <div class="sticky-note-colors-row">
-                <div class="sticky-note-color-group">
-                    <label for="stickyNoteColor" class="sticky-note-color-label">
-                        <i class="fas fa-palette"></i> Background
-                    </label>
-                    <input id="stickyNoteColor" type="color" value="#FFEB3B" class="sticky-note-color-input">
-                </div>
-                <div class="sticky-note-color-group">
-                    <label for="stickyNoteTextColor" class="sticky-note-color-label">
-                        <i class="fas fa-font"></i> Text
-                    </label>
-                    <input id="stickyNoteTextColor" type="color" value="#000000" class="sticky-note-color-input">
-                </div>
-            </div>
-        </div>
-        `,
+        html: renderRoomTemplate('tpl-sticky-note-form'),
         showCancelButton: true,
         confirmButtonText: 'Create',
         cancelButtonText: 'Cancel',
@@ -13740,80 +14209,218 @@ function createStickyNote() {
 }
 
 /**
- * Setup Canvas file selections
- * @param {string} title
+ * Format accepted file types for UI helper text
  * @param {string} accept
- * @param {object} renderToCanvas
+ * @returns {string}
  */
-function setupFileSelection(title, accept, renderToCanvas) {
-    Swal.fire({
+function formatAcceptedFileTypes(accept = '*') {
+    if (!accept || accept === '*') return 'any file type';
+
+    return accept
+        .split(',')
+        .map((type) => type.trim())
+        .filter(Boolean)
+        .map((type) => {
+            if (type.startsWith('.')) return type.slice(1).toUpperCase();
+            if (type.endsWith('/*')) return `${type.slice(0, -2).toUpperCase()} files`;
+            if (type.includes('/')) return type.split('/')[1].toUpperCase();
+            return type.toUpperCase();
+        })
+        .join(', ');
+}
+
+/**
+ * Open a styled file picker modal with drag-and-drop support
+ * @param {object} config
+ * @returns {Promise<File|null>}
+ */
+async function openFilePickerModal(config) {
+    const {
+        title,
+        accept = '*',
+        confirmButtonText = 'OK',
+        emptyStateTitle = 'Drop file here',
+        emptyStateSubtitle = 'or browse from your device',
+        helperText = `Supports ${formatAcceptedFileTypes(accept)}`,
+    } = config;
+
+    let selectedFile = null;
+
+    const result = await Swal.fire({
         allowOutsideClick: false,
         background: swBg,
         position: 'center',
         title: title,
         input: 'file',
-        html: `
-        <div id="dropArea">
-            <p>Drag and drop your file here</p>
-        </div>
-        `,
+        html: renderRoomTemplate('tpl-file-picker-modal', {
+            text: {
+                emptyStateTitle,
+                emptyStateSubtitle,
+                helperText,
+            },
+        }),
         inputAttributes: {
             accept: accept,
             'aria-label': title,
         },
+        customClass: {
+            htmlContainer: 'mirotalk-file-picker-html',
+        },
         didOpen: () => {
-            const dropArea = document.getElementById('dropArea');
-            dropArea.addEventListener('dragenter', handleDragEnter);
-            dropArea.addEventListener('dragover', handleDragOver);
-            dropArea.addEventListener('dragleave', handleDragLeave);
-            dropArea.addEventListener('drop', handleDrop);
+            const input = Swal.getInput();
+            const confirmButton = Swal.getConfirmButton();
+            const dropzone = getId('mirotalkFileDropzone');
+            const dropzoneTitle = getId('mirotalkFileDropzoneTitle');
+            const dropzoneSubtitle = getId('mirotalkFileDropzoneSubtitle');
+            const preview = getId('mirotalkFilePreview');
+            const fileName = getId('mirotalkFileName');
+            const fileDetails = getId('mirotalkFileDetails');
+            const browseBtn = getId('mirotalkFileBrowseBtn');
+            const removeBtn = getId('mirotalkFileRemoveBtn');
+
+            if (
+                !input ||
+                !confirmButton ||
+                !dropzone ||
+                !preview ||
+                !fileName ||
+                !fileDetails ||
+                !browseBtn ||
+                !removeBtn
+            )
+                return;
+
+            input.classList.add('mirotalk-hidden-file-input');
+            input.setAttribute('tabindex', '-1');
+            confirmButton.disabled = true;
+
+            const resetSelection = () => {
+                selectedFile = null;
+                input.value = '';
+                preview.hidden = true;
+                dropzone.classList.remove('has-file', 'is-dragover');
+                dropzoneTitle.textContent = emptyStateTitle;
+                dropzoneSubtitle.textContent = emptyStateSubtitle;
+                browseBtn.textContent = 'Browse files';
+                confirmButton.disabled = true;
+                Swal.resetValidationMessage();
+            };
+
+            const applySelection = (file) => {
+                if (!file) return resetSelection();
+                if (file.size <= 0) {
+                    resetSelection();
+                    return Swal.showValidationMessage('The selected file is empty.');
+                }
+
+                selectedFile = file;
+                fileName.textContent = file.name;
+                fileDetails.textContent = `${bytesToSize(file.size)}${file.type ? ` • ${file.type}` : ''}`;
+                preview.hidden = false;
+                dropzone.classList.add('has-file');
+                dropzone.classList.remove('is-dragover');
+                dropzoneTitle.textContent = 'File ready';
+                dropzoneSubtitle.textContent = 'Drop another file here or browse to replace it';
+                browseBtn.textContent = 'Browse another file';
+                Swal.resetValidationMessage();
+                confirmButton.disabled = false;
+            };
+
+            const openSystemPicker = (event) => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                input.click();
+            };
+
+            const handleDragState = (event, isActive) => {
+                event.preventDefault();
+                event.stopPropagation();
+                dropzone.classList.toggle('is-dragover', isActive);
+                if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+            };
+
+            browseBtn.addEventListener('click', openSystemPicker);
+            dropzone.addEventListener('click', openSystemPicker);
+            removeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                resetSelection();
+            });
+
+            input.addEventListener('change', () => {
+                applySelection(input.files && input.files.length ? input.files[0] : null);
+            });
+
+            dropzone.addEventListener('dragenter', (event) => handleDragState(event, true));
+            dropzone.addEventListener('dragover', (event) => handleDragState(event, true));
+            dropzone.addEventListener('dragleave', (event) => handleDragState(event, false));
+            dropzone.addEventListener('drop', (event) => {
+                handleDragState(event, false);
+
+                const transfer = event.dataTransfer;
+                if (!transfer) return;
+
+                if (transfer.items && transfer.items.length > 1) {
+                    resetSelection();
+                    return Swal.showValidationMessage('Please choose a single file.');
+                }
+
+                const item = transfer.items && transfer.items.length ? transfer.items[0] : null;
+                const entry = item && typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null;
+
+                if (entry && entry.isDirectory) {
+                    resetSelection();
+                    return Swal.showValidationMessage('Folders are not supported.');
+                }
+
+                if (item && item.kind && item.kind !== 'file') {
+                    resetSelection();
+                    return Swal.showValidationMessage('Only files can be uploaded here.');
+                }
+
+                const file = item && typeof item.getAsFile === 'function' ? item.getAsFile() : transfer.files[0];
+
+                if (!file) {
+                    resetSelection();
+                    return Swal.showValidationMessage('Could not read the selected file.');
+                }
+
+                applySelection(file);
+            });
         },
         showDenyButton: true,
-        confirmButtonText: `OK`,
-        denyButtonText: `Cancel`,
+        confirmButtonText: confirmButtonText,
+        denyButtonText: 'Cancel',
+        preConfirm: () => {
+            if (!selectedFile) {
+                Swal.showValidationMessage('Choose a file to continue.');
+                return false;
+            }
+            return selectedFile;
+        },
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-    }).then((result) => {
-        if (result.isConfirmed) {
-            renderToCanvas(result.value);
-        }
     });
 
-    function handleDragEnter(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.target.style.background = 'var(--body-bg)';
-    }
+    return result.isConfirmed ? result.value || selectedFile : null;
+}
 
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
-    }
+/**
+ * Setup Canvas file selections
+ * @param {string} title
+ * @param {string} accept
+ * @param {object} renderToCanvas
+ */
+async function setupFileSelection(title, accept, renderToCanvas) {
+    const file = await openFilePickerModal({
+        title,
+        accept,
+        confirmButtonText: 'OK',
+    });
 
-    function handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.target.style.background = '';
-    }
-
-    function handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-        e.target.style.background = '';
-    }
-
-    function handleFiles(files) {
-        if (files.length > 0) {
-            const file = files[0];
-            console.log('Selected file:', file);
-            Swal.close();
-            renderToCanvas(file);
-        }
-    }
+    if (file) renderToCanvas(file);
 }
 
 /**
@@ -14207,8 +14814,11 @@ function handleWhiteboardAction(config, logMe = true) {
             wbCanvasClear();
             removeCanvasGrid();
             break;
-        case 'toggle':
-            toggleWhiteboard();
+        case 'open':
+            if (!wbIsOpen) toggleWhiteboard();
+            break;
+        case 'close':
+            if (wbIsOpen) toggleWhiteboard();
             break;
         case 'lock':
             if (!isPresenter) {
@@ -14615,81 +15225,22 @@ function hideFileTransfer() {
  * @param {string} peer_id
  * @param {boolean} broadcast send to all (default false)
  */
-function selectFileToShare(peer_id, broadcast = false, peerName = '') {
+async function selectFileToShare(peer_id, broadcast = false, peerName = '') {
     playSound('newMessage');
 
     const targetLabel = !broadcast && peerName ? ` with ${peerName}` : '';
 
-    Swal.fire({
-        allowOutsideClick: false,
-        background: swBg,
-        imageAlt: 'mirotalk-file-sharing',
-        imageUrl: images.share,
-        position: 'center',
+    const file = await openFilePickerModal({
         title: `Share file${targetLabel}`,
-        input: 'file',
-        html: `
-        <div id="dropArea">
-            <p>Drag and drop your file here</p>
-        </div>
-        `,
-        inputAttributes: {
-            accept: fileSharingInput,
-            'aria-label': 'Select file',
-        },
-        didOpen: () => {
-            const dropArea = getId('dropArea');
-            dropArea.addEventListener('dragenter', handleDragEnter);
-            dropArea.addEventListener('dragover', handleDragOver);
-            dropArea.addEventListener('dragleave', handleDragLeave);
-            dropArea.addEventListener('drop', handleDrop);
-        },
-        showDenyButton: true,
-        confirmButtonText: `Send`,
-        denyButtonText: `Cancel`,
-        showClass: { popup: 'animate__animated animate__fadeInDown' },
-        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
-    }).then((result) => {
-        if (result.isConfirmed) {
-            sendFileInformations(result.value, peer_id, broadcast, peerName);
-        }
+        accept: fileSharingInput,
+        confirmButtonText: 'Send',
+        helperText:
+            fileSharingInput === '*'
+                ? 'Any file type supported'
+                : `Supports ${formatAcceptedFileTypes(fileSharingInput)}`,
     });
 
-    function handleDragEnter(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.target.style.background = 'var(--body-bg)';
-    }
-
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
-    }
-
-    function handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.target.style.background = '';
-    }
-
-    function handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-        e.target.style.background = '';
-    }
-
-    function handleFiles(files) {
-        if (files.length > 0) {
-            const file = files[0];
-            console.log('Selected file:', file);
-            Swal.close();
-            sendFileInformations(file, peer_id, broadcast, peerName);
-        }
-    }
+    if (file) sendFileInformations(file, peer_id, broadcast, peerName);
 }
 
 /**
@@ -15233,11 +15784,11 @@ function handleKickedOut(config) {
         position: 'center',
         imageUrl: images.leave,
         title: 'Kicked out!',
-        html:
-            `<h2 style="color: #FF2D00;">` +
-            `User ` +
-            peer_name +
-            `</h2> will kick out you after <b style="color: #FF2D00;"></b> milliseconds.`,
+        html: renderRoomTemplate('tpl-kicked-out-modal', {
+            text: {
+                peerName: peer_name,
+            },
+        }),
         timer: 5000,
         timerProgressBar: true,
         didOpen: () => {
@@ -15267,50 +15818,19 @@ function handleKickedOut(config) {
 function showAbout() {
     playSound('newMessage');
 
+    const aboutHtml = brand.about.html;
+
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.13',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.34',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
-        html: `
-            <br/>
-            <div id="about">
-                ${
-                    brand.about?.html && brand.about.html.trim() !== ''
-                        ? brand.about.html
-                        : `
-                        <button 
-                            id="support-button" 
-                            data-umami-event="Support button" 
-                            onclick="window.open('https://codecanyon.net/user/miroslavpejic85', '_blank')">
-                            <i class="${className.heart}"></i>&nbsp;Support
-                        </button>
-                        <br /><br /><br />
-                        Author: 
-                        <a 
-                            id="linkedin-button" 
-                            data-umami-event="Linkedin button" 
-                            href="https://www.linkedin.com/in/miroslav-pejic-976a07101/" 
-                            target="_blank"> 
-                            Miroslav Pejic
-                        </a>
-                        <br /><br />
-                        Email: 
-                        <a 
-                            id="email-button" 
-                            data-umami-event="Email button" 
-                            href="mailto:miroslav.pejic.85@gmail.com?subject=MiroTalk P2P info"> 
-                            miroslav.pejic.85@gmail.com
-                        </a>
-                        <br /><br />
-                        <hr />
-                        <span>&copy; 2025 MiroTalk P2P, all rights reserved</span>
-                        <hr />
-                        `
-                }
-            </div>
-        `,
+        html: renderRoomTemplate('tpl-about-modal', {
+            html: {
+                aboutHtml,
+            },
+        }),
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     });
@@ -15554,6 +16074,43 @@ function applyBoxShadowEffect(element, color, delay = 200) {
             element.style.boxShadow = 'none';
         }, delay);
     }
+}
+
+/**
+ * Show a persistent banner indicating the signaling server connection was lost.
+ */
+function showDisconnectBanner() {
+    if (!banner) return;
+    banner.classList.remove('reconnected');
+    icon.className = 'fa-solid fa-wifi-exclamation';
+    title.textContent = 'Connection lost';
+    msg.innerHTML = 'Reconnecting to signaling server\u2026';
+    spinner.style.opacity = '1';
+    if (disconnectBannerRafId) cancelAnimationFrame(disconnectBannerRafId);
+    disconnectBannerRafId = requestAnimationFrame(() => {
+        disconnectBannerRafId = null;
+        banner.classList.add('visible');
+    });
+}
+
+/**
+ * Hide the disconnect banner (or briefly show a reconnected confirmation).
+ */
+function hideDisconnectBanner() {
+    if (!banner) return;
+    if (disconnectBannerRafId) {
+        cancelAnimationFrame(disconnectBannerRafId);
+        disconnectBannerRafId = null;
+    }
+    if (!banner.classList.contains('visible')) return;
+    banner.classList.add('reconnected');
+    icon.className = 'fa-solid fa-circle-check';
+    title.textContent = 'Back online';
+    msg.textContent = 'Connection restored successfully';
+    setTimeout(() => {
+        banner.classList.remove('visible');
+        setTimeout(() => banner.classList.remove('reconnected'), 420);
+    }, 2800);
 }
 
 /**
@@ -16404,3 +16961,5 @@ function displayElements(elements) {
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// renderRoomTemplate is defined in roomTemplate.js
