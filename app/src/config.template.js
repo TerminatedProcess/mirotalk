@@ -2,7 +2,7 @@
 
 /**
  * ==============================================
- * MiroTalk P2P v.1.8.34 - Configuration File
+ * MiroTalk P2P v.1.8.55 - Configuration File
  * ==============================================
  *
  * This file is the central configuration source.
@@ -52,6 +52,32 @@ module.exports = {
         host: process.env.HOST || `http://localhost:${port}`,
         environment: process.env.NODE_ENV || 'development',
         trustProxy: !!getEnvBoolean(process.env.TRUST_PROXY),
+
+        /**
+         * Embed (iframe) Restrictions
+         * ---------------------------
+         * Controls which origins are allowed to embed MiroTalk P2P in an <iframe>
+         * via the HTTP `Content-Security-Policy: frame-ancestors` header
+         * (also mirrored to `X-Frame-Options` when possible for legacy browsers).
+         *
+         * Behavior:
+         * - Empty / unset  → header NOT set, embedding allowed anywhere (default).
+         * - 'none'         → block ALL embedding (frame-ancestors 'none' + X-Frame-Options: DENY).
+         * - 'self'         → only same-origin embedding (frame-ancestors 'self' + X-Frame-Options: SAMEORIGIN).
+         * - list           → comma-separated origins, 'self' is always implicitly included.
+         *                    Wildcards like https://*.example.com are valid in CSP.
+         *
+         * IMPORTANT: This affects the widget too — the MiroTalk widget embeds
+         * the room in an iframe on the host site, so every site that should
+         * load the widget must be listed here.
+         */
+        embed: {
+            allowedOrigins: process.env.ALLOWED_EMBED_ORIGINS
+                ? process.env.ALLOWED_EMBED_ORIGINS.split(',')
+                      .map((o) => o.trim())
+                      .filter(Boolean)
+                : [],
+        },
     },
 
     // ==========================================
@@ -192,6 +218,19 @@ module.exports = {
             ? getEnvBoolean(process.env.OIDC_ALLOW_ROOMS_CREATION_FOR_AUTH_USERS)
             : false,
         baseUrlDynamic: process.env.OIDC_BASE_URL_DYNAMIC ? getEnvBoolean(process.env.OIDC_BASE_URL_DYNAMIC) : false,
+        /*
+         * When `baseUrlDynamic` is true, the OIDC baseURL (and therefore the redirect_uri
+         * sent to the IdP) is derived from the incoming `Host` header. To prevent
+         * Host-header injection from redirecting authorization codes to an attacker,
+         * list every origin the server is allowed to serve here (full origin, no path).
+         * The static `config.baseURL` is always trusted and does not need to be repeated.
+         * Example: ['https://p2p.mirotalk.com', 'https://meet.example.com']
+         */
+        allowedDynamicBaseURLs: process.env.OIDC_ALLOWED_DYNAMIC_BASE_URLS
+            ? process.env.OIDC_ALLOWED_DYNAMIC_BASE_URLS.split(',')
+                  .map((u) => u.trim())
+                  .filter(Boolean)
+            : [],
         config: {
             issuerBaseURL: process.env.OIDC_ISSUER_BASE_URL,
             clientID: process.env.OIDC_CLIENT_ID,

@@ -45,11 +45,13 @@ dependencies: {
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.8.34
+ * @version 1.8.55
  *
  */
 
 'use strict'; // https://www.w3schools.com/js/js_strict.asp
+
+require('dotenv').config();
 
 const { auth, requiresAuth } = require('express-openid-connect');
 const { Server } = require('socket.io');
@@ -70,6 +72,7 @@ const Validate = require('./validate');
 const HtmlInjector = require('./htmlInjector');
 const Host = require('./host');
 const Logs = require('./logs');
+const { applyEmbedHeaders, embedAllowedOrigins, embedCsp } = require('./middleware/embedHeaders');
 const log = new Logs('server');
 
 // Central configuration (reads .env via dotenv internally)
@@ -378,6 +381,7 @@ const channels = {}; // collect channels
 const sockets = {}; // collect sockets
 const peers = {}; // collect peers info grp by channels
 const presenters = {}; // collect presenters grp by channels
+const wbLocks = {}; // server-authoritative whiteboard lock state grp by channels
 
 const roomMetaKeys = new Set(['lock', 'password']);
 
@@ -387,7 +391,29 @@ function getPeerCount(roomId) {
 }
 
 app.set('trust proxy', trustProxy); // Enables trust for proxy headers (e.g., X-Forwarded-For) based on the trustProxy setting
+
+// Guardrail: IP_WHITELIST_ENABLED=true without TRUST_PROXY=true is almost always a
+// misconfiguration. Refuse to start unless explicitly acknowledged via
+// IP_WHITELIST_ALLOW_UNTRUSTED_PROXY=true (then only the direct socket IP is matched).
+if (ipWhitelist.enabled && !trustProxy) {
+    const optIn = String(process.env.IP_WHITELIST_ALLOW_UNTRUSTED_PROXY || '').toLowerCase() === 'true';
+    if (!optIn) {
+        log.error(
+            'IP_WHITELIST_ENABLED=true requires TRUST_PROXY=true so that the real client IP can be resolved from a trusted reverse proxy. ' +
+                'Without it, X-Forwarded-For is attacker-controlled and the allow-list can be bypassed. ' +
+                'If this instance has no proxy in front and you understand that only direct socket addresses will be evaluated, ' +
+                'set IP_WHITELIST_ALLOW_UNTRUSTED_PROXY=true to acknowledge.',
+            { trustProxy, ipWhitelist }
+        );
+        process.exit(1);
+    }
+    log.warn(
+        'IP_WHITELIST_ENABLED=true with TRUST_PROXY=false (acknowledged): X-Forwarded-For will be ignored and only the direct socket address is checked.'
+    );
+}
+
 app.use(helmet.noSniff()); // Enable content type sniffing prevention
+app.use(applyEmbedHeaders); // Apply iframe embedding restrictions (CSP frame-ancestors / X-Frame-Options)
 
 // Use all static files from the public folder
 const staticOptions = {
@@ -460,6 +486,26 @@ app.use((err, req, res, next) => {
 // OpenID Connect - Cache auth() middleware instead of re-creating per request
 if (OIDC.enabled) {
     if (OIDC.baseUrlDynamic) {
+        // Build an allowlist of origins permitted to be used as the OIDC baseURL.
+        // This prevents Host-header injection from rewriting the redirect_uri
+        // (see: https://portswigger.net/web-security/host-header).
+        // Sources, in order of precedence:
+        //   1. config.oidc.allowedDynamicBaseURLs (string[] of full origins)
+        //   2. config.oidc.config.baseURL (always trusted)
+        const configuredAllowlist = Array.isArray(OIDC.allowedDynamicBaseURLs) ? OIDC.allowedDynamicBaseURLs : [];
+        const allowedOrigins = new Set(
+            [OIDC.config?.baseURL, ...configuredAllowlist]
+                .filter(Boolean)
+                .map((u) => {
+                    try {
+                        return new URL(u).origin;
+                    } catch {
+                        return null;
+                    }
+                })
+                .filter(Boolean)
+        );
+
         // Cache a middleware instance per host
         const authMiddlewareCache = new Map();
 
@@ -467,6 +513,18 @@ if (OIDC.enabled) {
             const host = req.headers.host;
             const protocol = req.protocol === 'https' ? 'https' : 'http';
             const cacheKey = `${protocol}://${host}`;
+
+            // Reject Host headers that are not in the configured allowlist.
+            // Without this, an attacker can force the OIDC library to emit a
+            // redirect_uri pointing to an attacker-controlled domain.
+            if (!allowedOrigins.has(cacheKey)) {
+                log.warn('OIDC Host header not in allowlist - rejecting request', {
+                    host,
+                    origin: cacheKey,
+                    allowed: [...allowedOrigins],
+                });
+                return res.status(400).send('Bad Request: invalid Host header');
+            }
 
             if (!authMiddlewareCache.has(cacheKey)) {
                 const config = { ...OIDC.config, baseURL: cacheKey };
@@ -1072,6 +1130,10 @@ function getServerConfig(tunnel = false) {
         // Core Configurations
         jwtCfg: jwtCfg,
         cors: corsOptions,
+        embed: {
+            allowedOrigins: embedAllowedOrigins.length ? embedAllowedOrigins : 'any',
+            csp: embedCsp ? embedCsp.csp : 'not set (embedding allowed from any origin)',
+        },
         iceServers: iceServers,
         test_ice_servers: testStunTurn,
         email: nodemailer.emailCfg.alert ? nodemailer.emailCfg : false,
@@ -1415,6 +1477,29 @@ io.sockets.on('connect', async (socket) => {
             peer_uuid: peer_uuid,
             is_presenter: is_presenter,
         };
+
+        // Recover presenter status on reconnect: if a stale presenter entry
+        // exists for this user (same peer_name AND same peer_uuid) under a
+        // previous socket.id, migrate it to the current socket.id. peer_uuid
+        // is never broadcast to other peers, so it cannot be spoofed by
+        // someone who only learned the display name.
+        for (const [existingPeerID, existingPresenter] of Object.entries(presenters[channel])) {
+            if (
+                existingPeerID !== socket.id &&
+                existingPresenter &&
+                existingPresenter.peer_name === peer_name &&
+                existingPresenter.peer_uuid === peer_uuid
+            ) {
+                delete presenters[channel][existingPeerID];
+                presenters[channel][socket.id] = presenter;
+                log.debug('[' + socket.id + '] Presenter recovered on reconnect', {
+                    previous_peer_id: existingPeerID,
+                    peer_name: peer_name,
+                });
+                break;
+            }
+        }
+
         // first we check if the username match the presenters username
         if (roomPresenters && roomPresenters.includes(peer_name)) {
             presenters[channel][socket.id] = presenter;
@@ -1551,15 +1636,16 @@ io.sockets.on('connect', async (socket) => {
         }
 
         //log.debug('[' + socket.id + '] Room action:', config);
-        const { room_id, peer_id, peer_name, peer_uuid, password, action } = config;
+        const { room_id, peer_name, peer_uuid, password, action } = config;
 
         if (!peers[room_id]) {
             log.warn('Room action room not found', { peer_id: socket.id, room_id });
             return;
         }
 
-        // Check if peer is presenter
-        const isPresenter = isPeerPresenter(room_id, peer_id, peer_name, peer_uuid);
+        // Check if peer is presenter using the server-controlled socket.id
+        // (NOT the client-supplied peer_id) to prevent role spoofing.
+        const isPresenter = isPeerPresenter(room_id, socket.id, peer_name, peer_uuid);
 
         let room_is_locked = false;
         //
@@ -1671,15 +1757,16 @@ io.sockets.on('connect', async (socket) => {
 
         const { action, send_to_all, data } = config;
 
-        const { room_id, peer_id, peer_name, peer_uuid, to_peer_id } = data;
+        const { room_id, peer_name, peer_uuid, to_peer_id } = data;
 
         log.debug('cmd', config);
 
         // Only the presenter can do this actions
         const presenterActions = ['geoLocation'];
         if (presenterActions.some((v) => action === v)) {
-            // Check if peer is presenter
-            const isPresenter = isPeerPresenter(room_id, peer_id, peer_name, peer_uuid);
+            // Authorize using the server-controlled socket.id, not the
+            // client-supplied peer_id, to prevent role spoofing.
+            const isPresenter = isPeerPresenter(room_id, socket.id, peer_name, peer_uuid);
             // if not presenter do nothing
             if (!isPresenter) return;
         }
@@ -1775,10 +1862,11 @@ io.sockets.on('connect', async (socket) => {
         } = config;
 
         // Only the presenter can do this actions
-        const presenterActions = ['muteAudio', 'hideVideo', 'ejectAll'];
+        const presenterActions = ['muteAudio', 'hideVideo', 'ejectAll', 'stopScreen', 'recStart', 'recStop'];
         if (presenterActions.some((v) => peer_action === v)) {
-            // Check if peer is presenter
-            const isPresenter = isPeerPresenter(room_id, peer_id, peer_name, peer_uuid);
+            // Authorize using the server-controlled socket.id, not the
+            // client-supplied peer_id, to prevent role spoofing.
+            const isPresenter = isPeerPresenter(room_id, socket.id, peer_name, peer_uuid);
             // if not presenter do nothing
             if (!isPresenter) return;
         }
@@ -1824,10 +1912,12 @@ io.sockets.on('connect', async (socket) => {
 
         if (!Validate.isValidData(config)) return;
 
+        // peer_id here is the TARGET to kick; the caller's identity is the
+        // server-controlled socket.id, not anything the client supplies.
         const { room_id, peer_id, peer_uuid, peer_name } = config;
 
-        // Check if peer is presenter
-        const isPresenter = await isPeerPresenter(room_id, peer_id, peer_name, peer_uuid);
+        // Authorize the caller using socket.id to prevent role spoofing.
+        const isPresenter = isPeerPresenter(room_id, socket.id, peer_name, peer_uuid);
 
         // Only the presenter can kickOut others
         if (isPresenter) {
@@ -1951,8 +2041,47 @@ io.sockets.on('connect', async (socket) => {
 
         if (!Validate.isValidData(config)) return;
 
+        // Security: cap payload size. A joined peer could otherwise spam
+        // huge canvas JSONs to chew CPU on every other peer's renderer.
+        // 2 MB is far above any realistic whiteboard state (a few hundred
+        // strokes + several base64-encoded images), well below DoS range.
+        if (typeof config.wbCanvasJson === 'string' && config.wbCanvasJson.length > 2_000_000) {
+            log.debug('wbCanvasToJson blocked: payload too large', {
+                size: config.wbCanvasJson.length,
+            });
+            return;
+        }
+
         // log.debug('Whiteboard send canvas', config);
-        const { room_id } = config;
+        const { room_id, peer_name, peer_uuid } = config;
+
+        // Security: require the sender to be an actual joined peer of the room.
+        // Without this, a socket that never joined could broadcast whiteboard
+        // payloads to all real peers in the room.
+        if (!peers[room_id] || !peers[room_id][socket.id]) {
+            log.debug('wbCanvasToJson blocked: sender is not a joined peer', {
+                room_id,
+                socket_id: socket.id,
+            });
+            return;
+        }
+
+        // Security: when the whiteboard is locked, only the presenter may
+        // overwrite the shared canvas. The lock state is server-authoritative
+        // and does not depend on the client toggling its local wbIsLock flag.
+        if (wbLocks[room_id] && !isPeerPresenter(room_id, socket.id, peer_name, peer_uuid)) {
+            log.debug('wbCanvasToJson blocked: whiteboard is locked and sender is not presenter', {
+                peer_name,
+            });
+            return;
+        }
+
+        // Security: strip fabric image objects whose `src` would force
+        // recipients' browsers to make outbound requests to attacker-chosen
+        // URLs (used as tracking beacons / internal-network probes). Only
+        // https://, http:// to public hosts, and data:image/ are allowed.
+        Validate.sanitizeWbCanvasJson(config, (msg, ctx) => log.debug(msg, ctx));
+
         await sendToRoom(room_id, socket.id, 'wbCanvasToJson', config);
     });
 
@@ -1962,8 +2091,48 @@ io.sockets.on('connect', async (socket) => {
 
         if (!Validate.isValidData(config)) return;
 
+        const { room_id, peer_name, peer_uuid, action } = config;
+
+        // Security: require the sender to be an actual joined peer of the room
+        // (see wbCanvasToJson above for rationale).
+        if (!peers[room_id] || !peers[room_id][socket.id]) {
+            log.debug('whiteboardAction blocked: sender is not a joined peer', {
+                room_id,
+                socket_id: socket.id,
+            });
+            return;
+        }
+
+        // Security: whiteboardAction mutates global whiteboard state
+        // (clear / undo / redo / bgcolor / lock / unlock / open / close) for
+        // every other peer. Only the presenter is allowed to trigger these.
+        // Verify against server-known peer identity, not client-supplied
+        // peer_name / peer_uuid (which are attacker-controlled in the request
+        // body).
+        if (!isPeerPresenter(room_id, socket.id, peer_name, peer_uuid)) {
+            log.debug('whiteboardAction blocked: sender is not presenter', {
+                action,
+                peer_name,
+            });
+            return;
+        }
+
+        // Overwrite the broadcast peer_name with the server-known value so a
+        // presenter can't be tricked into proxying an HTML payload supplied
+        // in the request body (the client renders peer_name inside a
+        // SweetAlert toast).
+        const stored = peers[room_id][socket.id];
+        if (stored && stored.peer_name) {
+            config.peer_name = stored.peer_name;
+        }
+
+        // Track lock state server-side so late-joining peers / future
+        // requests are gated even if the presenter never re-toggles the
+        // button.
+        if (action === 'lock') wbLocks[room_id] = true;
+        if (action === 'unlock') delete wbLocks[room_id];
+
         log.debug('Whiteboard', config);
-        const { room_id } = config;
         await sendToRoom(room_id, socket.id, 'whiteboardAction', config);
     });
 
@@ -2023,6 +2192,7 @@ io.sockets.on('connect', async (socket) => {
                 delete peers[channel];
                 delete presenters[channel];
                 delete channels[channel]; // Clean up channels to prevent memory leak
+                delete wbLocks[channel]; // Clean up whiteboard lock state
             }
         } catch (err) {
             log.error('Remove Peer', toJson(err));
@@ -2139,25 +2309,28 @@ async function getPeerGeoLocation(ip) {
  */
 function isPeerPresenter(room_id, peer_id, peer_name, peer_uuid) {
     try {
-        if (!presenters[room_id] || !presenters[room_id][peer_id]) {
-            // Presenter not in the presenters config list, disconnected, or peer_id changed...
-            for (const [existingPeerID, presenter] of Object.entries(presenters[room_id] || {})) {
-                if (presenter.peer_name === peer_name) {
-                    log.debug('[' + peer_id + '] Presenter found', presenters[room_id][existingPeerID]);
-                    return true;
-                }
-            }
+        // peer_id MUST be the server-controlled socket.id of the caller.
+        // Never trust a client-supplied peer_id, peer_name, or peer_uuid for
+        // authorization decisions: look up the stored presenter entry by
+        // socket.id and require both peer_name and peer_uuid to match what
+        // was recorded at join time.
+        const roomPresentersMap = presenters[room_id];
+        const stored = roomPresentersMap && roomPresentersMap[peer_id];
+
+        if (!stored) {
+            log.debug('[' + peer_id + '] isPeerPresenter - no stored presenter entry for caller', {
+                peer_name: peer_name,
+            });
             return false;
         }
 
         const isPresenter =
-            (typeof presenters[room_id] === 'object' &&
-                Object.keys(presenters[room_id][peer_id]).length > 1 &&
-                presenters[room_id][peer_id]['peer_name'] === peer_name &&
-                presenters[room_id][peer_id]['peer_uuid'] === peer_uuid) ||
-            (roomPresenters && roomPresenters.includes(peer_name));
+            typeof stored === 'object' &&
+            Object.keys(stored).length > 1 &&
+            stored.peer_name === peer_name &&
+            stored.peer_uuid === peer_uuid;
 
-        log.debug('[' + peer_id + '] isPeerPresenter', presenters[room_id][peer_id]);
+        log.debug('[' + peer_id + '] isPeerPresenter', { stored, isPresenter });
 
         return isPresenter;
     } catch (err) {
@@ -2311,33 +2484,32 @@ function isAllowedRoomAccess(logMessage, req, hostCfg, peers, roomId) {
 
 /**
  * Get ip
+ * Honours the X-Forwarded-For header only when Express has been configured
+ * with a `trust proxy` setting that matches the deployment topology. Reading
+ * the header directly from req.headers would let any client spoof its source
+ * address and bypass security controls such as the IP allow-list.
  * @param {object} req
  * @returns string ip
  */
 function getIP(req) {
-    const forwarded = req.headers['x-forwarded-for'] || req.headers['X-Forwarded-For'];
-
-    if (forwarded) {
-        // Return only the first IP (client's real IP)
-        return forwarded.split(',')[0].trim();
-    }
-
-    return req.socket.remoteAddress || req.ip;
+    return req.ip || req.socket?.remoteAddress;
 }
 
 /**
  * Get IP from socket
+ * Same rationale as getIP(): rely on the address that the underlying
+ * transport observed and only trust X-Forwarded-For when explicitly enabled
+ * via the trust proxy configuration.
  * @param {object} socket
  * @returns string
  */
 function getSocketIP(socket) {
-    const forwarded = socket.handshake.headers['x-forwarded-for'] || socket.handshake.headers['X-Forwarded-For'];
-
-    if (forwarded) {
-        // Return only the first IP (client's real IP)
-        return forwarded.split(',')[0].trim();
+    if (trustProxy) {
+        const forwarded = socket.handshake.headers['x-forwarded-for'] || socket.handshake.headers['X-Forwarded-For'];
+        if (forwarded) {
+            return forwarded.split(',')[0].trim();
+        }
     }
-
     return socket.handshake.address;
 }
 

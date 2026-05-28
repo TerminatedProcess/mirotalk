@@ -15,7 +15,7 @@
  * @license For commercial use or closed source, contact us at license.mirotalk@gmail.com or purchase directly from CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-p2p-webrtc-realtime-video-conferences/38376661
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.8.34
+ * @version 1.8.55
  *
  */
 
@@ -80,7 +80,7 @@ const className = {
     shareVideoAudio: 'fab fa-youtube',
     kickOut: 'fas fa-sign-out-alt',
     chatOn: 'fas fa-comment',
-    chatOff: 'fas fa-comment-slash',
+    chatOff: 'fas fa-comment',
     ghost: 'fas fa-ghost',
     undo: 'fas fa-undo',
     captionOn: 'fas fa-closed-captioning',
@@ -221,6 +221,11 @@ const settingsExtraDropdown = getId('settingsExtraDropdown');
 const settingsExtraToggle = getId('settingsExtraToggle');
 const settingsExtraMenu = getId('settingsExtraMenu');
 const leaveRoomBtn = getId('leaveRoomBtn');
+
+const exitDropdown = getId('exitDropdown');
+const exitMenu = getId('exitMenu');
+const exitLeaveBtn = getId('exitLeaveBtn');
+const exitLeaveAllBtn = getId('exitLeaveAllBtn');
 
 // Room Emoji Picker
 const closeEmojiPickerContainer = getId('closeEmojiPickerContainer');
@@ -688,6 +693,7 @@ let isCaptionPinned = false;
 let isChatRoomVisible = false;
 let isParticipantsVisible = false;
 let isChatOpenedByParticipantsBtn = false;
+let isOpeningParticipants = false;
 let isCaptionBoxVisible = false;
 let isChatEmojiVisible = false;
 let isChatMarkdownOn = false;
@@ -943,13 +949,13 @@ function refreshMainButtonsToolTipPlacement() {
     // BottomButtons
     bottomButtonsPlacement = btnsBarSelect.options[btnsBarSelect.selectedIndex].value == 'vertical' ? 'top' : 'right';
 
-    setTippy(audioBtn, useAudio ? 'Stop the audio' : 'My audio is disabled', bottomButtonsPlacement);
-    setTippy(videoBtn, useVideo ? 'Stop the video' : 'My video is disabled', bottomButtonsPlacement);
-    setTippy(screenShareBtn, 'Start screen sharing', bottomButtonsPlacement);
-    setTippy(myHandBtn, 'Raise your hand', bottomButtonsPlacement);
-    setTippy(chatRoomBtn, 'Open the chat', bottomButtonsPlacement);
+    setTippy(audioBtn, useAudio ? 'Stop the audio (A)' : 'My audio is disabled', bottomButtonsPlacement);
+    setTippy(videoBtn, useVideo ? 'Stop the video (V)' : 'My video is disabled', bottomButtonsPlacement);
+    setTippy(screenShareBtn, 'Start screen sharing (S)', bottomButtonsPlacement);
+    setTippy(myHandBtn, 'Raise your hand (H)', bottomButtonsPlacement);
+    setTippy(chatRoomBtn, 'Open the chat (C)', bottomButtonsPlacement);
     setTippy(participantsBtn, 'Show participants', bottomButtonsPlacement);
-    setTippy(mySettingsBtn, 'Open the settings', bottomButtonsPlacement);
+    setTippy(mySettingsBtn, 'Open the settings (O)', bottomButtonsPlacement);
     setTippy(leaveRoomBtn, 'Leave this room', bottomButtonsPlacement);
 }
 
@@ -6324,6 +6330,7 @@ function setChatRoomBtn() {
         setActiveConversation('public');
         msgerDraggable.classList.remove('msger-pinned-sidebar-open');
         msgerCPBtn.classList.remove('active');
+        syncChatToolbarButtons();
         msgerInput.focus();
         msgerChat.scrollTop = msgerChat.scrollHeight;
     });
@@ -6331,6 +6338,7 @@ function setChatRoomBtn() {
     msgerSidebarCloseBtn?.addEventListener('click', () => {
         msgerDraggable.classList.remove('msger-pinned-sidebar-open');
         msgerCPBtn.classList.remove('active');
+        syncChatToolbarButtons();
         closeAllMsgerParticipantDropdownMenus();
     });
 
@@ -6361,12 +6369,7 @@ function setChatRoomBtn() {
 
     // open hide chat room
     chatRoomBtn.addEventListener('click', (e) => {
-        if (!isChatRoomVisible) {
-            showChatRoomDraggable();
-        } else {
-            hideChatRoomAndEmojiPicker();
-            e.target.className = className.chatOn;
-        }
+        !isChatRoomVisible ? showChatRoomDraggable() : hideChatRoomAndEmojiPicker();
     });
 
     // pin/unpin
@@ -6404,6 +6407,7 @@ function setChatRoomBtn() {
         if (isChatPinned) {
             const isOpen = msgerDraggable.classList.toggle('msger-pinned-sidebar-open');
             msgerCPBtn.classList.toggle('active', isOpen);
+            syncChatToolbarButtons();
             if (isOpen) {
                 searchPeerBarName?.focus();
             } else {
@@ -6570,6 +6574,7 @@ function setParticipantsBtn() {
 
                 msgerDraggable.classList.remove('msger-pinned-sidebar-open');
                 msgerCPBtn.classList.remove('active');
+                syncChatToolbarButtons();
                 closeAllMsgerParticipantDropdownMenus();
                 screenReaderAccessibility.announceMessage('Participants list closed');
                 return;
@@ -6577,9 +6582,10 @@ function setParticipantsBtn() {
 
             msgerDraggable.classList.add('msger-pinned-sidebar-open');
 
-            if (!isChatRoomVisible) {
-                showChatRoomDraggable();
-            }
+            isOpeningParticipants = true;
+            msgerCPBtn.classList.add('active');
+
+            !isChatRoomVisible ? showChatRoomDraggable() : syncChatToolbarButtons();
 
             isChatOpenedByParticipantsBtn = openedChatForParticipants;
 
@@ -6591,6 +6597,8 @@ function setParticipantsBtn() {
             await sleep(500);
 
             msgerCPBtn.classList.add('active');
+            isOpeningParticipants = false;
+            syncChatToolbarButtons();
             searchPeerBarName?.focus();
             screenReaderAccessibility.announceMessage('Participants list opened');
             return;
@@ -7517,8 +7525,65 @@ function setAboutBtn() {
  */
 function setLeaveRoomBtn() {
     leaveRoomBtn.addEventListener('click', (e) => {
-        leaveRoom();
+        if (e && e.shiftKey) return leaveRoom();
+        if (!isPresenter) return leaveRoom();
+        toggleExitMenu();
     });
+    if (exitLeaveBtn) exitLeaveBtn.onclick = handleExitLeave;
+    if (exitLeaveAllBtn) exitLeaveAllBtn.onclick = handleExitLeaveForAll;
+    document.addEventListener('click', handleExitMenuOutsideClick);
+}
+
+/**
+ * Toggle the exit dropdown menu. The "End room for all" entry is
+ * only available to the presenter.
+ */
+function toggleExitMenu() {
+    if (!exitMenu) return leaveRoom();
+    if (exitLeaveAllBtn) {
+        isPresenter ? exitLeaveAllBtn.classList.remove('hidden') : exitLeaveAllBtn.classList.add('hidden');
+    }
+    exitMenu.classList.toggle('hidden');
+}
+
+function handleExitLeave() {
+    if (exitMenu) exitMenu.classList.add('hidden');
+    leaveRoom();
+}
+
+function handleExitLeaveForAll() {
+    if (exitMenu) exitMenu.classList.add('hidden');
+    leaveRoomForAll();
+}
+
+function handleExitMenuOutsideClick(e) {
+    if (!exitDropdown || !exitMenu) return;
+    if (exitMenu.classList.contains('hidden')) return;
+    if (!exitDropdown.contains(e.target)) exitMenu.classList.add('hidden');
+}
+
+/**
+ * Presenter: kick out all other peers, then leave the room.
+ */
+function leaveRoomForAll() {
+    if (!isPresenter) return leaveRoom();
+    try {
+        if (allPeers && typeof allPeers === 'object') {
+            for (const peer_id in allPeers) {
+                if (!allPeers[peer_id]) continue;
+                if (peer_id === myPeerId) continue;
+                sendToServer('kickOut', {
+                    room_id: roomId,
+                    peer_id: peer_id,
+                    peer_uuid: myPeerUUID,
+                    peer_name: myPeerName,
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('[leaveRoomForAll] failed to kick all peers', err);
+    }
+    leaveRoom();
 }
 
 /**
@@ -7825,7 +7890,7 @@ function handleShortcuts() {
                     mySettingsBtn.click();
                     break;
                 case 'x':
-                    if (notPresenter && !button.main.showHideMeBtn) {
+                    if (notPresenter && !buttons.main.showHideMeBtn) {
                         toastMessage('warning', 'The presenter has disabled your ability to hide yourself');
                         break;
                     }
@@ -9075,7 +9140,8 @@ function setScreenSharingStatus(status) {
         { element: initScreenShareBtn, status, mediaType: 'screen' },
         { element: screenShareBtn, status, mediaType: 'screen' },
     ]);
-    setTippy(screenShareBtn, status ? 'Stop screen sharing' : 'Start screen sharing', placement);
+    setTippy(screenShareBtn, status ? 'Stop screen sharing (S)' : 'Start screen sharing (S)', placement);
+    if (screenShareBtn && screenShareBtn.setAttribute) screenShareBtn.setAttribute('aria-pressed', String(!!status));
 }
 
 /**
@@ -9650,7 +9716,11 @@ function toggleVideoAudioTabs(disabled = false) {
  * @param {object} mediaRecorder
  */
 function handleMediaRecorder(mediaRecorder) {
-    mediaRecorder.start();
+    // Always pass a timeslice so the browser flushes encoded chunks into
+    // recordedBlobs periodically instead of buffering the entire recording
+    // in renderer memory. This makes long (>1h) recordings stable and
+    // avoids MediaRecorder auto-stops caused by memory pressure.
+    mediaRecorder.start(1000);
     mediaRecorder.addEventListener('start', handleMediaRecorderStart);
     mediaRecorder.addEventListener('dataavailable', handleMediaRecorderData);
     mediaRecorder.addEventListener('stop', handleMediaRecorderStop);
@@ -9906,7 +9976,6 @@ function showChatRoomDraggable() {
     //chatLeftCenter();
     chatCenter();
 
-    chatRoomBtn.className = className.chatOff;
     isChatRoomVisible = true;
 
     if (!isMobileDevice && canBePinned() && pinChatByDefault && !isChatPinned && !isCaptionPinned) {
@@ -9914,9 +9983,28 @@ function showChatRoomDraggable() {
     }
 
     syncParticipantsPanelVisibility();
+    syncChatToolbarButtons();
 
-    setTippy(chatRoomBtn, 'Close the chat', bottomButtonsPlacement);
+    setTippy(chatRoomBtn, 'Close the chat (C)', bottomButtonsPlacement);
     screenReaderAccessibility.announceMessage('Chat opened');
+}
+
+/**
+ * Sync the active visual state of the chat / participants toolbar buttons
+ * with the current chat & participants panel visibility.
+ */
+function syncChatToolbarButtons() {
+    const participantsActive = isOpeningParticipants || !!(msgerCPBtn && msgerCPBtn.classList.contains('active'));
+    const chatActive = !!isChatRoomVisible && !participantsActive;
+    if (chatRoomBtn) {
+        chatRoomBtn.classList.toggle('is-active', chatActive);
+        chatRoomBtn.setAttribute('aria-pressed', chatActive ? 'true' : 'false');
+    }
+    if (participantsBtn) {
+        participantsBtn.classList.toggle('is-active', participantsActive);
+        participantsBtn.setAttribute('aria-pressed', participantsActive ? 'true' : 'false');
+        participantsBtn.setAttribute('aria-expanded', participantsActive ? 'true' : 'false');
+    }
 }
 
 function shouldDockParticipantsPanel() {
@@ -9960,6 +10048,7 @@ function syncParticipantsPanelVisibility(forceVisible = null) {
         msgerCPBtn.classList.remove('active');
         closeAllMsgerParticipantDropdownMenus();
         isParticipantsVisible = false;
+        syncChatToolbarButtons();
         return;
     }
 
@@ -9981,6 +10070,7 @@ function syncParticipantsPanelVisibility(forceVisible = null) {
     }
 
     isParticipantsVisible = shouldShow;
+    syncChatToolbarButtons();
     toggleMsgerParticipantsEmptyNotice();
 }
 
@@ -10412,12 +10502,12 @@ function hideChatRoomAndEmojiPicker() {
     elemDisplay(msgerCP, false);
     elemDisplay(msgerEmojiPicker, false);
     setColor(msgerEmojiBtn, '#FFFFFF');
-    chatRoomBtn.className = className.chatOn;
     isChatRoomVisible = false;
     isParticipantsVisible = false;
     isChatOpenedByParticipantsBtn = false;
     isChatEmojiVisible = false;
-    setTippy(chatRoomBtn, 'Open the chat', bottomButtonsPlacement);
+    setTippy(chatRoomBtn, 'Open the chat (C)', bottomButtonsPlacement);
+    syncChatToolbarButtons();
     screenReaderAccessibility.announceMessage('Chat closed');
 }
 
@@ -10919,7 +11009,7 @@ function appendMessage(from, img, side, msg, privateMsg, msgId = null, to = '') 
                     id="msg-speech-${chatMessagesId}"
                     class="${className.speech}" 
                     style="color:#fff; border:none; background:transparent;"
-                    onclick="speechElementText(false, '${getFrom}', 'message-${chatMessagesId}')"
+                    onclick="speechElementText(false, '${escapeJsString(getFrom)}', 'message-${chatMessagesId}')"
                 ></button>`;
     }
 
@@ -11224,6 +11314,33 @@ function toggleMsgerParticipantsEmptyNotice() {
     msgerPrivateChatsEmpty?.classList.toggle('hidden', hasPrivateChats || isMobileParticipantsView);
     elemDisplay(msgerCPList, hasPrivateChats, 'flex');
     elemDisplay(msgerParticipantsList, false);
+}
+
+/**
+ * Escape a value for safe embedding inside a single-quoted JavaScript string
+ * literal that lives in an HTML attribute (e.g. an inline onclick handler).
+ *
+ * filterXSS() / DOMPurify do NOT encode characters that break out of a JS
+ * string context (single-quote, backslash, newline). Embedding user-controlled
+ * data such as a peer name directly in an inline handler without this escape
+ * allows a stored XSS where a crafted name like `X', alert(1), '` would close
+ * the string argument and inject an arbitrary JS expression as a new argument.
+ *
+ * @param {*} value
+ * @returns {string}
+ */
+function escapeJsString(value) {
+    return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029')
+        .replace(/</g, '\\x3C')
+        .replace(/>/g, '\\x3E')
+        .replace(/&/g, '\\x26');
 }
 
 /**
@@ -12578,14 +12695,15 @@ function setMyHandStatus() {
         // Raise hand
         setColor(myHandBtn, '#FFD700');
         elemDisplay(myHandStatusIcon, true);
-        setTippy(myHandBtn, 'Raise your hand', bottomButtonsPlacement);
+        setTippy(myHandBtn, 'Lower your hand (H)', bottomButtonsPlacement);
         playSound('raiseHand');
     } else {
         // Lower hand
         setColor(myHandBtn, 'var(--btn-bar-bg-color)');
         elemDisplay(myHandStatusIcon, false);
-        setTippy(myHandBtn, 'Lower your hand', bottomButtonsPlacement);
+        setTippy(myHandBtn, 'Raise your hand (H)', bottomButtonsPlacement);
     }
+    if (myHandBtn && myHandBtn.setAttribute) myHandBtn.setAttribute('aria-pressed', String(!!myHandStatus));
     emitPeerStatus('hand', myHandStatus);
 }
 
@@ -12602,7 +12720,8 @@ function setMyAudioStatus(status) {
     emitPeerStatus('audio', status);
     const audioStatusLabel = status ? 'My audio is on' : 'My audio is off';
     setTippy(myAudioStatusIcon, audioStatusLabel, 'bottom');
-    setTippy(audioBtn, status ? 'Stop the audio' : 'Start the audio', bottomButtonsPlacement);
+    setTippy(audioBtn, status ? 'Stop the audio (A)' : 'Start the audio (A)', bottomButtonsPlacement);
+    if (audioBtn && audioBtn.setAttribute) audioBtn.setAttribute('aria-pressed', String(!!status));
     status ? playSound('on') : playSound('off');
     screenReaderAccessibility.announceMessage(audioStatusLabel);
 }
@@ -12630,8 +12749,9 @@ function setMyVideoStatus(status) {
 
     if (!isMobileDevice) {
         if (myVideoStatusIcon) setTippy(myVideoStatusIcon, videoStatusLabel, 'bottom');
-        setTippy(videoBtn, status ? 'Stop the video' : 'Start the video', bottomButtonsPlacement);
+        setTippy(videoBtn, status ? 'Stop the video (V)' : 'Start the video (V)', bottomButtonsPlacement);
     }
+    if (videoBtn && videoBtn.setAttribute) videoBtn.setAttribute('aria-pressed', String(!!status));
 
     if (status) {
         displayElements([
@@ -14704,6 +14824,8 @@ function wbCanvasToJson() {
     if (thereArePeerConnections()) {
         const config = {
             room_id: roomId,
+            peer_name: myPeerName,
+            peer_uuid: myPeerUUID,
             wbCanvasJson: JSON.stringify(wbCanvas.toJSON()),
         };
         sendToServer('wbCanvasToJson', config);
@@ -14749,6 +14871,7 @@ function getWhiteboardAction(action) {
     return {
         room_id: roomId,
         peer_name: myPeerName,
+        peer_uuid: myPeerUUID,
         action: action,
     };
 }
@@ -14798,7 +14921,17 @@ function handleWhiteboardAction(config, logMe = true) {
     const { peer_name, action, color } = config;
 
     if (logMe) {
-        userLog('toast', `${icons.user} ${peer_name} \n whiteboard action: ${action}`);
+        // Security: peer_name is attacker-controllable in upstream payloads and
+        // the Swal toast renders the title as HTML. Escape angle brackets /
+        // quotes so a crafted name like `<img src=//attacker/track>` can't
+        // trigger outbound requests in every recipient's browser.
+        const safePeerName = String(peer_name || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        userLog('toast', `${icons.user} ${safePeerName} \n whiteboard action: ${action}`);
     }
     switch (action) {
         case 'bgcolor':
@@ -15823,7 +15956,7 @@ function showAbout() {
     Swal.fire({
         background: swBg,
         position: 'center',
-        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.34',
+        title: brand.about?.title && brand.about.title.trim() !== '' ? brand.about.title : 'WebRTC P2P v1.8.55',
         imageUrl: brand.about?.imageUrl && brand.about.imageUrl.trim() !== '' ? brand.about.imageUrl : images.about,
         customClass: { image: 'img-about' },
         html: renderRoomTemplate('tpl-about-modal', {
